@@ -453,8 +453,8 @@ header {
       <button class="btn primary" id="auth-send" style="width:100%">Email me a sign-in code</button>
     </div>
     <div id="auth-step-code" style="display:none">
-      <p class="auth-sub">Enter the 6-digit code we emailed to <b id="auth-email-echo"></b></p>
-      <input id="auth-code" inputmode="numeric" maxlength="6" placeholder="123456" style="text-align:center;font-size:20px;letter-spacing:6px">
+      <p class="auth-sub">Enter the sign-in code we emailed to <b id="auth-email-echo"></b></p>
+      <input id="auth-code" inputmode="numeric" maxlength="10" placeholder="sign-in code" style="text-align:center;font-size:20px;letter-spacing:4px">
       <button class="btn primary" id="auth-verify" style="width:100%">Sign in</button>
       <button class="btn subtle" id="auth-back" style="width:100%;margin-top:8px">Use a different email</button>
     </div>
@@ -1979,7 +1979,7 @@ $("auth-send").onclick = async () => {
 $("auth-verify").onclick = async () => {
   const email = $("auth-email").value.trim().toLowerCase();
   const token = $("auth-code").value.trim();
-  if (token.length < 6) { $("auth-note").textContent = "Enter the 6-digit code from the email."; return; }
+  if (token.length < 6) { $("auth-note").textContent = "Enter the full code from the email."; return; }
   $("auth-verify").disabled = true;
   const { data, error } = await sb.auth.verifyOtp({ email, token, type: "email" });
   $("auth-verify").disabled = false;
