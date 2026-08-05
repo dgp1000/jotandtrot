@@ -1111,7 +1111,7 @@ async function maybeAutoSuggest() {
       await reloadTripData();
       toast(`✨ Found ${n} suggestions nearby — check the Suggestions tab`);
     } else if (state._scoutFailed > 0) {
-      toast("The map service is busy right now — wait a minute, then hit ✨ Scout this area");
+      toast("The free map servers are struggling right now — try ✨ Scout this area again in a few minutes.");
     } else {
       toast("Scouting finished — nothing found right here. Try the Scout button on a town or city.");
     }
@@ -1139,6 +1139,13 @@ function setScoutStatus(active) {
   renderSuggestionMarkers(); // scout over + not on Suggestions tab → tidy the live pins away
 }
 
+/* live stage narration on the scout button — the scout should never look frozen */
+function setScoutStage(text) {
+  if (!state.scouting) return;
+  const found = state.scoutFound || 0;
+  $("scout-btn").innerHTML = `<span class="spin"></span>${esc(text)}${found ? ` · ${found} found` : ""}<span class="stop-x">✕ stop</span>`;
+}
+
 function stopScout() {
   if (state.scoutAbort) state.scoutAbort.abort();
   const n = state.scoutFound || 0;
@@ -1160,7 +1167,7 @@ async function scoutHere() {
     const n = await autoSuggest(state.trip.id, c.lat, c.lng, radius, ctl.signal);
     await reloadTripData();
     if (n > 0) { setTab("sugg"); toast(`✨ Done — ${n} new suggestions here`); }
-    else if (state._scoutFailed > 0) toast("The map service is busy right now — wait a minute and scout again");
+    else if (state._scoutFailed > 0) toast("The free map servers are struggling right now — scouting will work again when they recover. Try in a few minutes.");
     else toast("Scouting finished — nothing new in this view. Try zooming to a town or city.");
   } catch (e) {
     if (!ctl.signal.aborted) toast("Scouting failed — try again in a moment");
@@ -1202,11 +1209,11 @@ async function autoSuggest(tripId, lat, lng, radius = 6000, signal = null) {
   const mkFood = (r) => `node(around:${r},${lat},${lng})[amenity=restaurant][name];node(around:${r},${lat},${lng})[amenity=cafe][name];`;
   const mkLodge = (r) => `nwr(around:${r},${lat},${lng})[tourism=hotel][name];nwr(around:${r},${lat},${lng})[tourism=guest_house][name];`;
   const searches = [
-    { kinds: { sight: 5, activity: 3 }, make: mkSights, r: radius, cap: 150 },
-    { kinds: { food: 4 },               make: mkFood,   r: Math.min(radius, 2500), cap: 60 },
-    { kinds: { lodging: 3 },            make: mkLodge,  r: Math.min(radius, 4000), cap: 60 },
+    { kinds: { sight: 5, activity: 3 }, make: mkSights, r: radius, cap: 150, label: "sights & activities" },
+    { kinds: { food: 4 },               make: mkFood,   r: Math.min(radius, 2500), cap: 60, label: "places to eat" },
+    { kinds: { lodging: 3 },            make: mkLodge,  r: Math.min(radius, 4000), cap: 60, label: "places to stay" },
   ];
-  const deadline = Date.now() + 50000; // whole scout wraps up inside ~50s, keeping whatever it found
+  const deadline = Date.now() + 40000; // whole scout wraps up inside ~40s, keeping whatever it found
 
   const seen = new Set([
     ...state.stops.map(s => s.name.toLowerCase()),
@@ -1221,6 +1228,7 @@ async function autoSuggest(tripId, lat, lng, radius = 6000, signal = null) {
     if (Date.now() > deadline) break;
     if (i > 0) await new Promise(r => setTimeout(r, 700)); // pace requests — public servers rate-limit bursts
     if (signal && signal.aborted) break;
+    setScoutStage(`Looking for ${grp.label}…`);
     let els = null;
     try { els = await fetchOverpass(Q(grp.make(grp.r), grp.cap), signal, i, deadline); }
     catch (e) { if (signal && signal.aborted) break; }
@@ -1236,8 +1244,13 @@ async function autoSuggest(tripId, lat, lng, radius = 6000, signal = null) {
     const picks = classifyElements(els, grp.kinds, seen, area, tripId);
     if (!picks.length) continue;
     const rows = picks.map(({ _score, ...row }) => row);
-    const { data, error } = await sb.from("trip_suggestions").insert(rows).select();
-    if (error) { console.error(error); continue; }
+    // never let a hung database call freeze the scout: 10s or we move on
+    const saved = await Promise.race([
+      sb.from("trip_suggestions").insert(rows).select(),
+      new Promise(r => setTimeout(() => r({ data: null, error: { message: "save timed out" } }), 10000)),
+    ]);
+    const { data, error } = saved;
+    if (error) { console.error("suggestion save:", error); continue; }
     const inserted = (data && data.length) ? data : rows;
     total += inserted.length;
     revealSuggestions(inserted, signal); // don't block the next search on the reveal animation
@@ -1249,29 +1262,30 @@ async function autoSuggest(tripId, lat, lng, radius = 6000, signal = null) {
 }
 
 async function fetchOverpass(query, signal, rotate = 0, deadline = 0) {
+  // five public mirrors, fastest-first; availability shifts week to week, so the
+  // scout works as long as ANY one of them is up (12s cap per attempt)
   const base = [
+    "https://overpass.openstreetmap.fr/api/interpreter",
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
     "https://overpass-api.de/api/interpreter",
     "https://overpass.private.coffee/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
   ];
   const endpoints = base.slice(rotate % base.length).concat(base.slice(0, rotate % base.length));
-  for (let round = 0; round < 2; round++) {
-    if (round > 0) await new Promise(r => setTimeout(r, 2000)); // back off before a retry round
-    for (const ep of endpoints) {
-      if (deadline && Date.now() > deadline) return null;
+  for (const ep of endpoints) {
+    if (deadline && Date.now() > deadline) return null;
+    if (signal && signal.aborted) { const err = new Error("scout aborted"); err.name = "AbortError"; throw err; }
+    try {
+      const res = await fetchT(`${ep}?data=${encodeURIComponent(query)}`, {
+        headers: { "Accept": "application/json" },
+        signal,
+      }, 12000);
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (data.remark && !(data.elements || []).length) continue; // server-side timeout, empty
+      return data.elements || [];
+    } catch (e) {
       if (signal && signal.aborted) { const err = new Error("scout aborted"); err.name = "AbortError"; throw err; }
-      try {
-        const res = await fetchT(`${ep}?data=${encodeURIComponent(query)}`, {
-          headers: { "Accept": "application/json" },
-          signal,
-        }, 20000);
-        if (!res.ok) continue;
-        const data = await res.json();
-        if (data.remark && !(data.elements || []).length) continue; // timed-out empty result
-        return data.elements || [];
-      } catch (e) {
-        if (signal && signal.aborted) { const err = new Error("scout aborted"); err.name = "AbortError"; throw err; }
-      }
     }
   }
   return null;
