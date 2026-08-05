@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
 <title>JollyJaunt</title>
 <style id="leaflet-css">
 /*__LEAFLET_CSS__*/
@@ -172,6 +172,51 @@ header {
   z-index: 1000;
 }
 #map { flex: 1; background: #dce8e8; }
+
+/* ===== mobile layout: one pane at a time (Map / Plan) with a bottom switcher ===== */
+#mobile-nav { display: none; }
+@media (max-width: 820px) {
+  header {
+    height: auto; min-height: 48px; flex-wrap: nowrap; gap: 8px; padding: 6px 10px;
+    padding-top: calc(6px + env(safe-area-inset-top));
+  }
+  .logo { font-size: 16px; white-space: nowrap; }
+  body.in-trip .logo { display: none; } /* in a trip, the trip name is the identity */
+  #header-trip-info { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+  #header-trip-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; font-weight: 700; }
+  #header-trip-dates, #live-dot, #user-chip { display: none !important; }
+  body.in-trip .header-spacer { display: none; } /* trip name takes the flex space instead */
+  body.in-trip #signout-btn { display: none !important; } /* sign out lives on the home screen */
+  header .btn { padding: 5px 9px; font-size: 12px; white-space: nowrap; flex: 0 0 auto; }
+
+  #trip-view { height: auto; position: fixed; inset: 0; top: calc(48px + env(safe-area-inset-top)); }
+  #trip-view.active { display: block; }
+  #sidebar, #map { position: absolute; inset: 0; width: 100%; min-width: 0; border-right: none; }
+  #sidebar { padding-bottom: calc(58px + env(safe-area-inset-bottom)); }
+  /* which pane is showing */
+  #trip-view.pane-map #sidebar { display: none; }
+  #trip-view.pane-plan #map { visibility: hidden; }
+  #scout-btn { top: auto; right: 12px; bottom: calc(70px + env(safe-area-inset-bottom)); }
+
+  #mobile-nav {
+    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 1200;
+    background: var(--panel); border-top: 1px solid var(--line);
+    padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
+    gap: 8px;
+  }
+  #mobile-nav button {
+    flex: 1; border: none; background: none; font-family: inherit; font-size: 12.5px;
+    color: var(--ink-soft); padding: 7px 0 5px; border-radius: 10px; cursor: pointer;
+  }
+  #mobile-nav button.active { color: var(--teal, #0f6b6b); background: #eaf2f2; font-weight: 700; }
+  #mobile-nav .mn-emoji { display: block; font-size: 19px; margin-bottom: 1px; }
+  /* hide bottom nav when on home/auth screens */
+  body:not(.in-trip) #mobile-nav { display: none; }
+
+  /* home + auth breathing room */
+  #home-view { padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
+  .join-row { flex-wrap: wrap; }
+}
 
 /* search */
 .search-wrap { padding: 14px 16px 10px; border-bottom: 1px solid var(--line); position: relative; }
@@ -507,6 +552,11 @@ header {
 
 <div id="toast"></div>
 
+<nav id="mobile-nav">
+  <button id="mn-map" class="active"><span class="mn-emoji">🗺️</span>Map</button>
+  <button id="mn-plan"><span class="mn-emoji">🗓️</span>Plan</button>
+</nav>
+
 <script id="leaflet-js">/*__LEAFLET_JS__*/</script>
 <script id="supabase-js">/*__SUPABASE_JS__*/</script>
 <script>
@@ -836,9 +886,24 @@ $("tab-itin").onclick = () => setTab("itin");
 $("tab-sugg").onclick = () => setTab("sugg");
 $("scout-btn").onclick = () => state.scouting ? stopScout() : scoutHere();
 
+/* mobile: which pane is on screen (map or plan) */
+function setPane(pane) {
+  state.pane = pane;
+  const tv = $("trip-view");
+  tv.classList.toggle("pane-map", pane === "map");
+  tv.classList.toggle("pane-plan", pane === "plan");
+  $("mn-map").classList.toggle("active", pane === "map");
+  $("mn-plan").classList.toggle("active", pane === "plan");
+  if (pane === "map" && state.map) setTimeout(() => state.map.invalidateSize(), 60);
+}
+$("mn-map").onclick = () => setPane("map");
+$("mn-plan").onclick = () => setPane("plan");
+
 function showTripView() {
   $("home-view").style.display = "none";
   $("trip-view").classList.add("active");
+  document.body.classList.add("in-trip");
+  setPane("map"); // mobile starts on the map; desktop shows both regardless
   $("header-trip-info").style.display = "block";
   $("header-trip-name").textContent = state.trip.name;
   $("header-trip-dates").textContent = " · " + (state.trip.destination || "") +
@@ -857,6 +922,7 @@ function showTripView() {
 function showHome() {
   unsubscribeRealtime();
   state.trip = null;
+  document.body.classList.remove("in-trip");
   $("trip-view").classList.remove("active");
   $("home-view").style.display = "block";
   $("header-trip-info").style.display = "none";
@@ -1347,6 +1413,7 @@ function renderRouteLines() {
 
 function highlightStop(id, panMap = true) {
   state.highlightId = id;
+  if (panMap && window.innerWidth <= 820) setPane("map"); // mobile: tapping a stop shows it on the map
   document.querySelectorAll(".stop-card").forEach(el => el.classList.toggle("highlight", el.dataset.id === id));
   const card = document.querySelector(`.stop-card[data-id="${id}"]`);
   if (card) card.scrollIntoView({ behavior: "smooth", block: "nearest" });
