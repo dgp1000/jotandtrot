@@ -3,3 +3,7 @@ debug*.js
 shot_*.png
 node_modules/
 trip-architect.html
+jollyjaunt-app-store-plan.md
+verify*.js
+package.json
+package-lock.json
