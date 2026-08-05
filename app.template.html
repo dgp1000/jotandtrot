@@ -1,0 +1,1878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JollyJaunt</title>
+<style id="leaflet-css">
+/*__LEAFLET_CSS__*/
+</style>
+<style>
+:root {
+  --bg: #f6f4ef;
+  --panel: #ffffff;
+  --ink: #1f2a2e;
+  --ink-soft: #5b6b70;
+  --line: #e5e0d5;
+  --teal: #0f6b6b;
+  --teal-dark: #0a4f4f;
+  --amber: #d98324;
+  --radius: 14px;
+  --shadow: 0 2px 12px rgba(31, 42, 46, 0.08);
+  --shadow-lg: 0 8px 32px rgba(31, 42, 46, 0.16);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  overflow: hidden;
+}
+button { font-family: inherit; cursor: pointer; }
+input, select, textarea { font-family: inherit; font-size: 14px; }
+
+/* ---------- Header ---------- */
+header {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 18px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  position: relative;
+  z-index: 1100;
+}
+.logo {
+  font-weight: 800;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+  color: var(--teal);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.logo .compass { font-size: 20px; }
+#header-trip-name { font-weight: 600; font-size: 15px; }
+#header-trip-dates { color: var(--ink-soft); font-size: 13px; }
+.header-spacer { flex: 1; }
+.btn {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 13.5px;
+  font-weight: 600;
+  transition: all .15s;
+}
+.btn:hover { border-color: var(--teal); color: var(--teal); }
+.btn.primary { background: var(--teal); border-color: var(--teal); color: #fff; }
+.btn.primary:hover { background: var(--teal-dark); color: #fff; }
+.btn.subtle { border: none; background: transparent; color: var(--ink-soft); }
+.btn.subtle:hover { color: var(--teal); }
+.btn.danger:hover { border-color: #c0392b; color: #c0392b; }
+
+/* ---------- Home view ---------- */
+#home-view {
+  height: calc(100% - 56px);
+  overflow-y: auto;
+  padding: 36px 28px;
+}
+.home-inner { max-width: 980px; margin: 0 auto; }
+.home-hero { margin-bottom: 28px; }
+.home-hero h1 { font-size: 30px; letter-spacing: -0.03em; margin-bottom: 6px; }
+.home-hero p { color: var(--ink-soft); font-size: 15px; }
+.trip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 16px;
+}
+.trip-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+  cursor: pointer;
+  transition: all .15s;
+  box-shadow: var(--shadow);
+}
+.trip-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); border-color: var(--teal); }
+.trip-card h3 { font-size: 17px; margin-bottom: 4px; letter-spacing: -0.01em; }
+.trip-card .dest { color: var(--teal); font-size: 13.5px; font-weight: 600; margin-bottom: 8px; }
+.trip-card .dates { color: var(--ink-soft); font-size: 12.5px; }
+.trip-card.new {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  border-style: dashed; color: var(--ink-soft); min-height: 120px;
+  background: transparent; box-shadow: none;
+}
+.trip-card.new:hover { color: var(--teal); }
+.trip-card.new .plus { font-size: 28px; line-height: 1; margin-bottom: 6px; }
+.trip-card { position: relative; }
+.trip-del {
+  position: absolute; top: 10px; right: 10px;
+  border: none; background: transparent; color: var(--ink-soft);
+  font-size: 14px; padding: 4px 6px; border-radius: 8px;
+  opacity: 0; transition: opacity .15s;
+}
+.trip-card:hover .trip-del { opacity: .7; }
+.trip-del:hover { opacity: 1 !important; background: rgba(192,57,43,.1); color: #c0392b; }
+.join-row { margin-top: 26px; display: flex; gap: 10px; align-items: center; color: var(--ink-soft); font-size: 13.5px; }
+.join-row input {
+  border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; width: 160px;
+  background: var(--panel);
+}
+
+/* ---------- Trip view ---------- */
+#trip-view { display: none; height: calc(100% - 56px); position: relative; }
+#trip-view.active { display: flex; }
+#scout-btn {
+  position: absolute; top: 12px; right: 12px; z-index: 1001;
+  box-shadow: var(--shadow-lg); background: var(--panel);
+}
+#scout-btn.scouting { color: var(--amber); border-color: var(--amber); }
+#scout-btn.scouting:hover { background: #fdf3e3; }
+#scout-btn.scouting .stop-x { font-weight: 700; margin-left: 7px; }
+.spin {
+  display: inline-block; width: 11px; height: 11px; border-radius: 50%;
+  border: 2px solid var(--amber); border-top-color: transparent;
+  animation: spin .8s linear infinite; vertical-align: -1px; margin-right: 5px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.sugg-scouting {
+  display: flex; align-items: center; gap: 8px;
+  background: #fdf3e3; border: 1px solid #f0d9ad; color: #7a5312;
+  border-radius: 10px; padding: 9px 13px; font-size: 12.5px; margin: 12px 0 4px;
+}
+#sidebar {
+  width: 400px;
+  min-width: 340px;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+}
+#map { flex: 1; background: #dce8e8; }
+
+/* search */
+.search-wrap { padding: 14px 16px 10px; border-bottom: 1px solid var(--line); position: relative; }
+.search-box {
+  display: flex; gap: 8px;
+}
+.search-box input {
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--bg);
+}
+.search-box input:focus { outline: 2px solid var(--teal); outline-offset: -1px; }
+#search-results {
+  position: absolute;
+  top: calc(100% - 4px);
+  left: 16px; right: 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  z-index: 1200;
+  max-height: 260px;
+  overflow-y: auto;
+  display: none;
+}
+#search-results.open { display: block; }
+.search-result {
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 13.5px;
+  border-bottom: 1px solid var(--line);
+}
+.search-result:last-child { border-bottom: none; }
+.search-result:hover { background: var(--bg); }
+.search-result .sr-name { font-weight: 600; }
+.search-result .sr-addr { color: var(--ink-soft); font-size: 12px; margin-top: 2px; }
+
+/* itinerary */
+#itinerary { flex: 1; overflow-y: auto; padding: 10px 16px 24px; }
+.autoplan-bar { margin: 10px 0 4px; }
+.autoplan-bar .btn, .sugg-topbar .btn { width: 100%; text-align: center; }
+.sugg-topbar { margin: 12px 0 2px; }
+.day-section { margin-top: 16px; }
+.day-header {
+  display: flex; align-items: baseline; gap: 8px;
+  padding-bottom: 6px; margin-bottom: 8px;
+  border-bottom: 2px solid var(--line);
+}
+.day-header .day-title { font-weight: 700; font-size: 14px; letter-spacing: -0.01em; }
+.day-header .day-date { color: var(--ink-soft); font-size: 12px; }
+.day-header .day-count { margin-left: auto; color: var(--ink-soft); font-size: 12px; }
+.stop-card {
+  display: flex;
+  gap: 10px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  transition: all .15s;
+}
+.stop-card.highlight { border-color: var(--amber); box-shadow: 0 0 0 2px rgba(217,131,36,.25); }
+.stop-num {
+  flex-shrink: 0;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12.5px; font-weight: 700;
+  margin-top: 2px;
+}
+.stop-body { flex: 1; min-width: 0; }
+.stop-name { font-weight: 600; font-size: 14px; cursor: pointer; }
+.stop-name:hover { color: var(--teal); }
+.stop-addr { color: var(--ink-soft); font-size: 12px; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stop-notes { font-size: 12.5px; color: var(--ink-soft); margin-top: 4px; font-style: italic; }
+.stop-actions {
+  display: flex; align-items: center; gap: 2px; margin-top: 6px; flex-wrap: wrap;
+}
+.icon-btn {
+  border: none; background: transparent;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  padding: 3px 6px;
+  border-radius: 7px;
+}
+.icon-btn:hover { background: rgba(15,107,107,.1); color: var(--teal); }
+.icon-btn.voted { color: var(--amber); font-weight: 700; }
+.day-select {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  font-size: 11.5px;
+  padding: 2px 4px;
+  color: var(--ink-soft);
+  margin-left: auto;
+}
+.empty-day { color: var(--ink-soft); font-size: 12.5px; padding: 4px 2px 8px; font-style: italic; }
+.day-total { color: var(--teal); font-size: 12px; font-weight: 700; }
+.cost-chip {
+  display: inline-block; background: rgba(15,107,107,.1); color: var(--teal);
+  font-size: 11.5px; font-weight: 700; border-radius: 6px; padding: 1px 6px; margin-left: 6px;
+}
+.trip-total {
+  margin-top: 14px; padding: 10px 14px; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 10px; font-size: 13px; display: flex; justify-content: space-between;
+}
+.trip-total b { color: var(--teal); }
+
+/* drag & drop */
+.stop-card[draggable="true"] { cursor: grab; }
+.stop-card.dragging { opacity: .45; }
+.day-section.drag-over .day-header { border-bottom-color: var(--amber); }
+.drop-slot { height: 0; border-radius: 6px; transition: height .12s; }
+.drop-slot.active { height: 34px; border: 2px dashed var(--amber); margin-bottom: 8px; background: rgba(217,131,36,.06); }
+
+/* sidebar tabs */
+.side-tabs { display: flex; gap: 4px; padding: 10px 16px 0; border-bottom: 1px solid var(--line); }
+.side-tab {
+  border: none; background: transparent; font-size: 13.5px; font-weight: 600;
+  color: var(--ink-soft); padding: 8px 12px; border-radius: 10px 10px 0 0;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.side-tab:hover { color: var(--teal); }
+.side-tab.active { color: var(--teal); border-bottom-color: var(--teal); }
+.sugg-badge {
+  display: inline-block; background: var(--amber); color: #fff; font-size: 10.5px;
+  font-weight: 800; border-radius: 999px; padding: 1px 7px; margin-left: 4px; vertical-align: 1px;
+}
+
+/* suggestion cards */
+#suggestions { flex: 1; overflow-y: auto; padding: 10px 16px 24px; display: none; }
+.sugg-group-title { font-weight: 700; font-size: 13px; margin: 16px 0 8px; padding-bottom: 5px; border-bottom: 2px solid var(--line); }
+.sugg-card {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 12px;
+  padding: 11px 13px; margin-bottom: 8px;
+}
+.sugg-card.added { opacity: .55; }
+.sugg-head { display: flex; align-items: baseline; gap: 6px; }
+.sugg-name { font-weight: 650; font-size: 13.5px; }
+.sugg-cost { margin-left: auto; color: var(--teal); font-weight: 700; font-size: 12.5px; white-space: nowrap; }
+.sugg-area { color: var(--amber); font-size: 11.5px; font-weight: 700; margin-top: 1px; }
+.sugg-desc { color: var(--ink-soft); font-size: 12.5px; margin-top: 4px; line-height: 1.45; }
+.sugg-actions { display: flex; gap: 6px; margin-top: 8px; }
+.sugg-actions .btn { padding: 4px 10px; font-size: 12px; border-radius: 8px; }
+.sugg-empty { color: var(--ink-soft); font-size: 13px; padding: 18px 4px; line-height: 1.5; }
+.sugg-pin {
+  width: 22px; height: 22px; border-radius: 50% 50% 50% 4px; transform: rotate(-45deg);
+  background: #fff; border: 2.5px dashed; box-shadow: 0 2px 6px rgba(0,0,0,.25);
+  display: flex; align-items: center; justify-content: center;
+}
+.sugg-pin span { transform: rotate(45deg); font-size: 10px; }
+.staying-chip {
+  display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink-soft);
+  background: #f6f3ec; border: 1px dashed #d8d2c4; border-radius: 9px;
+  padding: 6px 11px; margin: 5px 0 5px 38px; cursor: pointer;
+}
+.staying-chip:hover { background: #efeade; }
+.staying-chip b { color: var(--ink); font-weight: 600; }
+.staying-night { margin-left: auto; font-size: 11.5px; opacity: .8; }
+.pin-pop { animation: pinpop .45s cubic-bezier(.2,1.6,.4,1); }
+@keyframes pinpop {
+  0% { transform: translateY(-18px) scale(.3); opacity: 0; }
+  60% { transform: translateY(2px) scale(1.15); opacity: 1; }
+  100% { transform: translateY(0) scale(1); }
+}
+
+/* live indicator */
+#live-dot { display: none; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-soft); }
+#live-dot .dot { width: 8px; height: 8px; border-radius: 50%; background: #2eb872; box-shadow: 0 0 0 3px rgba(46,184,114,.2); }
+.itinerary-footer { margin-top: 18px; display: flex; gap: 8px; }
+
+/* ---------- Modal ---------- */
+#modal-backdrop {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(31,42,46,.45);
+  z-index: 2000;
+  align-items: center; justify-content: center;
+}
+#modal-backdrop.open { display: flex; }
+#modal {
+  background: var(--panel);
+  border-radius: 16px;
+  box-shadow: var(--shadow-lg);
+  width: 420px;
+  max-width: calc(100vw - 40px);
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  padding: 24px;
+}
+#modal h2 { font-size: 19px; letter-spacing: -0.02em; margin-bottom: 16px; }
+.field { margin-bottom: 14px; }
+.field label { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); margin-bottom: 5px; }
+.field input, .field select, .field textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 12px;
+  background: var(--bg);
+}
+.field input:focus, .field select:focus, .field textarea:focus { outline: 2px solid var(--teal); outline-offset: -1px; }
+.field-row { display: flex; gap: 10px; }
+.field-row .field { flex: 1; }
+.dest-wrap { position: relative; }
+#dest-results {
+  position: absolute; top: 100%; left: 0; right: 0;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: var(--shadow-lg); z-index: 2200; max-height: 200px; overflow-y: auto; display: none;
+}
+#dest-results.open { display: block; }
+.dest-result { padding: 9px 12px; cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--line); }
+.dest-result:last-child { border-bottom: none; }
+.dest-result:hover { background: var(--bg); }
+.dest-result .dr-main { font-weight: 600; }
+.dest-result .dr-sub { color: var(--ink-soft); font-size: 11.5px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
+/* map markers */
+.pin {
+  width: 28px; height: 28px;
+  border-radius: 50% 50% 50% 4px;
+  transform: rotate(-45deg);
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,.35);
+  display: flex; align-items: center; justify-content: center;
+}
+.pin span { transform: rotate(45deg); color: #fff; font-size: 11px; font-weight: 800; }
+
+/* toast */
+#toast {
+  position: fixed;
+  bottom: 24px; left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: var(--ink);
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  z-index: 3000;
+  transition: transform .25s;
+  box-shadow: var(--shadow-lg);
+}
+#toast.show { transform: translateX(-50%) translateY(0); }
+
+.offline-note {
+  background: #fdf3e3; border: 1px solid #f0d9ad; color: #7a5312;
+  border-radius: 10px; padding: 10px 14px; font-size: 13px; margin-bottom: 18px;
+  display: none;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo" id="logo-btn" style="cursor:pointer" title="All trips"><span class="compass">🧭</span> JollyJaunt</div>
+  <div id="header-trip-info" style="display:none">
+    <span id="header-trip-name"></span>
+    <span id="header-trip-dates"></span>
+  </div>
+  <div class="header-spacer"></div>
+  <span id="live-dot"><span class="dot"></span> Live</span>
+  <button class="btn subtle" id="share-btn" style="display:none">🔗 Share code</button>
+  <button class="btn subtle" id="refresh-btn" style="display:none" title="Refresh from server">↻ Sync</button>
+  <button class="btn subtle" id="back-btn" style="display:none">← All trips</button>
+</header>
+
+<div id="home-view">
+  <div class="home-inner">
+    <div class="home-hero">
+      <h1>Where to next?</h1>
+      <p>Plan trips on a live map, day by day, and vote on stops with your crew.</p>
+    </div>
+    <div class="offline-note" id="offline-note">
+      Couldn't reach the trip database from this window. If you're viewing this as a sidebar artifact, try opening the app file directly in your browser.
+    </div>
+    <div class="trip-grid" id="trip-grid"></div>
+    <div class="join-row">
+      <span>Have a share code from a friend?</span>
+      <input id="join-code" placeholder="e.g. 3fa9c21b04d2" maxlength="16">
+      <button class="btn" id="join-btn">Open trip</button>
+    </div>
+  </div>
+</div>
+
+<div id="trip-view">
+  <div id="sidebar">
+    <div class="search-wrap">
+      <div class="search-box">
+        <input id="search-input" placeholder="Search a place to add… (e.g. Louvre, ramen Shibuya)">
+        <button class="btn primary" id="search-btn">Search</button>
+      </div>
+      <div id="search-results"></div>
+    </div>
+    <div class="side-tabs">
+      <button class="side-tab active" id="tab-itin">🗓️ Itinerary</button>
+      <button class="side-tab" id="tab-sugg">✨ Suggestions<span id="sugg-badge"></span></button>
+    </div>
+    <div id="itinerary"></div>
+    <div id="suggestions"></div>
+  </div>
+  <div id="map"></div>
+  <button class="btn" id="scout-btn" title="Search this area for things to do, eat, and stay">✨ Scout this area</button>
+</div>
+
+<div id="modal-backdrop">
+  <div id="modal"></div>
+</div>
+
+<div id="toast"></div>
+
+<script id="leaflet-js">/*__LEAFLET_JS__*/</script>
+<script id="supabase-js">/*__SUPABASE_JS__*/</script>
+<script>
+/* ================= Trip Architect v1 ================= */
+const SUPABASE_URL = "https://hdsnwuhbmbvrkjctrsbm.supabase.co";
+const SUPABASE_KEY = "sb_publishable_8yxzekSbGKHy9SK-HRJWYw_fH7-2KaQ";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const CATEGORIES = {
+  sight:    { emoji: "🏛️", label: "Sight",    color: "#0f6b6b" },
+  food:     { emoji: "🍜", label: "Food",     color: "#d98324" },
+  lodging:  { emoji: "🛏️", label: "Lodging",  color: "#7b5ea7" },
+  transit:  { emoji: "🚆", label: "Transit",  color: "#5b6b70" },
+  activity: { emoji: "🎯", label: "Activity", color: "#2e86ab" },
+  other:    { emoji: "📍", label: "Other",    color: "#94a3a8" },
+};
+
+let state = {
+  trips: [],
+  trip: null,          // current trip row
+  stops: [],           // stops for current trip
+  votes: [],           // votes for stops of current trip
+  voterName: null,     // in-memory only (artifacts disallow localStorage)
+  map: null,
+  markers: {},         // stopId -> leaflet marker
+  highlightId: null,
+};
+
+/* ---------- utilities ---------- */
+const $ = (id) => document.getElementById(id);
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove("show"), 2600);
+}
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function fmtDate(d) {
+  if (!d) return "";
+  const dt = new Date(d + "T12:00:00");
+  return dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+function fmtRange(a, b) {
+  if (!a && !b) return "";
+  if (a && b) return `${fmtDate(a)} – ${fmtDate(b)}`;
+  return fmtDate(a || b);
+}
+function dayDate(trip, dayIndex) {
+  if (!trip.start_date || dayIndex < 1) return "";
+  const dt = new Date(trip.start_date + "T12:00:00");
+  dt.setDate(dt.getDate() + (dayIndex - 1));
+  return dt.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+function tripDayCount(trip) {
+  let n = 3;
+  if (trip.start_date && trip.end_date) {
+    n = Math.min(60, Math.max(1, Math.round((new Date(trip.end_date) - new Date(trip.start_date)) / 86400000) + 1));
+  }
+  // grow if stops exist on later days
+  for (const s of state.stops) if (s.day_index > n) n = s.day_index;
+  return n;
+}
+const CURRENCY_SYMBOLS = { USD: "$", EUR: "€", GBP: "£", JPY: "¥", BRL: "R$", CAD: "C$", AUD: "A$", MXN: "MX$", CHF: "CHF ", INR: "₹", KRW: "₩", CNY: "¥" };
+function money(amount) {
+  if (amount == null || isNaN(amount)) return "";
+  const code = (state.trip && state.trip.currency) || "USD";
+  const sym = CURRENCY_SYMBOLS[code] || code + " ";
+  const n = Math.round(amount * 100) / 100;
+  return sym + (Number.isInteger(n) ? n.toLocaleString() : n.toLocaleString(undefined, { minimumFractionDigits: 2 }));
+}
+const DAY_COLORS = ["#0f6b6b", "#d98324", "#7b5ea7", "#2e86ab", "#c0392b", "#5e8c61", "#a86464", "#4a6fa5"];
+function ensureVoter() {
+  if (state.voterName) return state.voterName;
+  const name = prompt("Your name (for voting):");
+  if (name && name.trim()) state.voterName = name.trim().slice(0, 40);
+  return state.voterName;
+}
+
+/* ---------- modal helpers ---------- */
+function openModal(html) {
+  $("modal").innerHTML = html;
+  $("modal-backdrop").classList.add("open");
+}
+function closeModal() { $("modal-backdrop").classList.remove("open"); }
+$("modal-backdrop").addEventListener("click", (e) => { if (e.target === $("modal-backdrop")) closeModal(); });
+
+/* ---------- data: trips ---------- */
+async function loadTrips() {
+  const { data, error } = await sb.from("trip_trips").select("*").order("created_at", { ascending: false });
+  if (error) { $("offline-note").style.display = "block"; console.error(error); return; }
+  $("offline-note").style.display = "none";
+  state.trips = data;
+  renderTripGrid();
+}
+
+function renderTripGrid() {
+  const grid = $("trip-grid");
+  grid.innerHTML = "";
+  const newCard = document.createElement("div");
+  newCard.className = "trip-card new";
+  newCard.innerHTML = `<div class="plus">+</div><div>New trip</div>`;
+  newCard.onclick = showCreateTrip;
+  grid.appendChild(newCard);
+  for (const t of state.trips) {
+    const card = document.createElement("div");
+    card.className = "trip-card";
+    card.innerHTML = `
+      <h3>${esc(t.name)}</h3>
+      <div class="dest">${esc(t.destination || "")}</div>
+      <div class="dates">${fmtRange(t.start_date, t.end_date)}</div>
+      <button class="trip-del" title="Delete trip">🗑</button>`;
+    card.onclick = () => openTrip(t.id);
+    card.querySelector(".trip-del").onclick = (e) => { e.stopPropagation(); confirmDeleteTrip(t); };
+    grid.appendChild(card);
+  }
+}
+
+function confirmDeleteTrip(t) {
+  openModal(`
+    <h2>Delete "${esc(t.name)}"?</h2>
+    <p style="font-size:13.5px;color:var(--ink-soft);line-height:1.5;margin-bottom:6px">
+      This permanently deletes the trip along with <b>all of its stops, votes, and suggestions</b> —
+      for everyone it's shared with. There's no undo.
+    </p>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn danger" id="m-confirm-del" style="border-color:#c0392b;color:#c0392b">Delete forever</button>
+    </div>`);
+  $("m-confirm-del").onclick = async () => {
+    const { error } = await sb.from("trip_trips").delete().eq("id", t.id);
+    if (error) { toast("Couldn't delete trip"); console.error(error); return; }
+    closeModal();
+    await loadTrips();
+    toast(`"${t.name}" deleted`);
+  };
+}
+
+function showCreateTrip() {
+  openModal(`
+    <h2>New trip</h2>
+    <div class="field"><label>Trip name</label><input id="m-name" placeholder="Tokyo with the crew"></div>
+    <div class="field dest-wrap"><label>Destination</label><input id="m-dest" placeholder="Start typing… e.g. Tokyo" autocomplete="off">
+      <div id="dest-results"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Start date</label><input id="m-start" type="date"></div>
+      <div class="field"><label>End date</label><input id="m-end" type="date"></div>
+    </div>
+    <div class="field" style="max-width:140px"><label>Budget currency</label>
+      <select id="m-currency">${Object.keys(CURRENCY_SYMBOLS).map(c => `<option ${c === "USD" ? "selected" : ""}>${c}</option>`).join("")}</select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" id="m-create">Create trip</button>
+    </div>`);
+  $("m-name").focus();
+
+  // --- destination autocomplete ---
+  let chosenDest = null;
+  let destTimer = null;
+  const destInput = $("m-dest");
+  const destBox = $("dest-results");
+  destInput.addEventListener("input", () => {
+    chosenDest = null;
+    clearTimeout(destTimer);
+    const q = destInput.value.trim();
+    if (q.length < 2) { destBox.classList.remove("open"); return; }
+    destTimer = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        destBox.innerHTML = "";
+        if (!data.length) { destBox.classList.remove("open"); return; }
+        for (const r of data) {
+          const parts = r.display_name.split(",").map(p => p.trim());
+          const label = parts.length > 1 ? `${parts[0]}, ${parts[parts.length - 1]}` : parts[0];
+          const el = document.createElement("div");
+          el.className = "dest-result";
+          el.innerHTML = `<div class="dr-main">${esc(parts[0])}</div><div class="dr-sub">${esc(parts.slice(1).join(", "))}</div>`;
+          el.onclick = () => {
+            chosenDest = { lat: +r.lat, lng: +r.lon, bbox: r.boundingbox || null, label };
+            destInput.value = label;
+            destBox.classList.remove("open");
+          };
+          destBox.appendChild(el);
+        }
+        destBox.classList.add("open");
+      } catch (e) { destBox.classList.remove("open"); }
+    }, 350);
+  });
+  destInput.addEventListener("blur", () => setTimeout(() => destBox.classList.remove("open"), 200));
+
+  $("m-create").onclick = async () => {
+    const name = $("m-name").value.trim();
+    if (!name) { toast("Give the trip a name"); return; }
+    const destText = destInput.value.trim();
+    // if they typed a destination but didn't pick from the list, geocode it best-effort
+    if (!chosenDest && destText) {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(destText)}`);
+        const data = await res.json();
+        if (data.length) chosenDest = { lat: +data[0].lat, lng: +data[0].lon, bbox: data[0].boundingbox || null, label: destText };
+      } catch (e) {}
+    }
+    const row = {
+      name,
+      destination: destText || null,
+      start_date: $("m-start").value || null,
+      end_date: $("m-end").value || null,
+      currency: $("m-currency").value,
+      dest_lat: chosenDest ? chosenDest.lat : null,
+      dest_lng: chosenDest ? chosenDest.lng : null,
+      dest_bbox: chosenDest ? chosenDest.bbox : null,
+    };
+    const { data, error } = await sb.from("trip_trips").insert(row).select().single();
+    if (error) { toast("Couldn't create trip"); console.error(error); return; }
+    closeModal();
+    await loadTrips();
+    openTrip(data.id);
+  };
+}
+
+/* ---------- data: current trip ---------- */
+async function openTrip(id) {
+  const { data: trip, error } = await sb.from("trip_trips").select("*").eq("id", id).single();
+  if (error || !trip) { toast("Couldn't open trip"); return; }
+  state.trip = trip;
+  state._fitted = false;
+  await reloadTripData();
+  showTripView();
+  subscribeRealtime(id);
+  await backfillDestCoords();
+  maybeAutoSuggest();
+}
+
+/* center the map on the trip's destination when there are no stops yet */
+function centerOnDestination() {
+  if (!state.map || !state.trip) return;
+  if (state.stops.some(s => s.lat != null)) return; // stops take priority
+  const t = state.trip;
+  if (t.dest_bbox && t.dest_bbox.length === 4) {
+    const [s, n, w, e] = t.dest_bbox.map(Number);
+    state.map.fitBounds([[s, w], [n, e]], { maxZoom: 13 });
+  } else if (t.dest_lat != null && t.dest_lng != null) {
+    state.map.setView([t.dest_lat, t.dest_lng], 11);
+  } else {
+    state.map.setView([20, 0], 2); // no destination known — world view
+  }
+}
+
+/* older trips have a destination string but no coords — geocode once and save */
+async function backfillDestCoords() {
+  const t = state.trip;
+  if (!t || !t.destination || t.dest_lat != null) return;
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(t.destination)}`);
+    const data = await res.json();
+    if (!data.length) return;
+    const patch = { dest_lat: +data[0].lat, dest_lng: +data[0].lon, dest_bbox: data[0].boundingbox || null };
+    Object.assign(t, patch);
+    await sb.from("trip_trips").update(patch).eq("id", t.id);
+    centerOnDestination();
+  } catch (e) {}
+}
+
+/* ---------- realtime ---------- */
+let rtChannel = null, rtDebounce = null;
+function subscribeRealtime(tripId) {
+  unsubscribeRealtime();
+  try {
+    const onChange = () => {
+      clearTimeout(rtDebounce);
+      rtDebounce = setTimeout(() => { if (state.trip && state.trip.id === tripId) reloadTripData(); }, 250);
+    };
+    rtChannel = sb.channel(`trip-${tripId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_stops", filter: `trip_id=eq.${tripId}` }, onChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_votes", filter: `trip_id=eq.${tripId}` }, onChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_suggestions", filter: `trip_id=eq.${tripId}` }, onChange)
+      .subscribe((status) => {
+        $("live-dot").style.display = status === "SUBSCRIBED" ? "flex" : "none";
+      });
+  } catch (e) { console.warn("realtime unavailable", e); }
+}
+function unsubscribeRealtime() {
+  $("live-dot").style.display = "none";
+  if (rtChannel) { try { sb.removeChannel(rtChannel); } catch (e) {} rtChannel = null; }
+}
+
+async function reloadTripData() {
+  const tripId = state.trip.id;
+  const [stopsRes, votesRes, suggRes] = await Promise.all([
+    sb.from("trip_stops").select("*").eq("trip_id", tripId).order("day_index").order("order_index"),
+    sb.from("trip_votes").select("*, trip_stops!inner(trip_id)").eq("trip_stops.trip_id", tripId),
+    sb.from("trip_suggestions").select("*").eq("trip_id", tripId).order("created_at", { ascending: false }),
+  ]);
+  state.stops = stopsRes.data || [];
+  state.votes = votesRes.data || [];
+  state.suggestions = suggRes.data || [];
+  renderItinerary();
+  renderSuggestions();
+  renderMarkers();
+}
+
+/* ---------- sidebar tabs ---------- */
+function setTab(tab) {
+  state.tab = tab;
+  $("tab-itin").classList.toggle("active", tab === "itin");
+  $("tab-sugg").classList.toggle("active", tab === "sugg");
+  $("itinerary").style.display = tab === "itin" ? "block" : "none";
+  $("suggestions").style.display = tab === "sugg" ? "block" : "none";
+  renderMarkers();
+}
+$("tab-itin").onclick = () => setTab("itin");
+$("tab-sugg").onclick = () => setTab("sugg");
+$("scout-btn").onclick = () => state.scouting ? stopScout() : scoutHere();
+
+function showTripView() {
+  $("home-view").style.display = "none";
+  $("trip-view").classList.add("active");
+  $("header-trip-info").style.display = "block";
+  $("header-trip-name").textContent = state.trip.name;
+  $("header-trip-dates").textContent = " · " + (state.trip.destination || "") +
+    (state.trip.start_date ? " · " + fmtRange(state.trip.start_date, state.trip.end_date) : "");
+  $("back-btn").style.display = "";
+  $("share-btn").style.display = "";
+  $("refresh-btn").style.display = "";
+  initMap();
+  setTab("itin");
+  renderItinerary();
+  renderSuggestions();
+  renderMarkers();
+  centerOnDestination();
+}
+
+function showHome() {
+  unsubscribeRealtime();
+  state.trip = null;
+  $("trip-view").classList.remove("active");
+  $("home-view").style.display = "block";
+  $("header-trip-info").style.display = "none";
+  $("back-btn").style.display = "none";
+  $("share-btn").style.display = "none";
+  $("refresh-btn").style.display = "none";
+  loadTrips();
+}
+
+$("back-btn").onclick = showHome;
+$("logo-btn").onclick = showHome;
+$("refresh-btn").onclick = async () => { await reloadTripData(); toast("Synced"); };
+$("share-btn").onclick = () => {
+  const code = state.trip.share_slug;
+  openModal(`
+    <h2>Share this trip</h2>
+    <p style="font-size:13.5px;color:var(--ink-soft);margin-bottom:14px">
+      Anyone with this code can open the trip from the home screen ("Have a share code?") and add stops or vote.
+    </p>
+    <div class="field"><input value="${esc(code)}" readonly onclick="this.select()" style="font-size:18px;text-align:center;font-weight:700;letter-spacing:2px"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Close</button>
+      <button class="btn primary" onclick="navigator.clipboard && navigator.clipboard.writeText('${esc(code)}').then(()=>{closeModal();toast('Code copied')})">Copy code</button>
+    </div>`);
+};
+
+$("join-btn").onclick = async () => {
+  const code = $("join-code").value.trim().toLowerCase();
+  if (!code) return;
+  const { data, error } = await sb.from("trip_trips").select("id").eq("share_slug", code).maybeSingle();
+  if (error || !data) { toast("No trip found for that code"); return; }
+  openTrip(data.id);
+};
+
+/* ---------- map ---------- */
+function initMap() {
+  if (state.map) { setTimeout(() => state.map.invalidateSize(), 50); return; }
+  state.map = L.map("map", { zoomControl: true }).setView([20, 0], 2);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  }).addTo(state.map);
+  state.map.on("click", (e) => onMapClick(e.latlng));
+  setTimeout(() => state.map.invalidateSize(), 50);
+}
+
+function makePinIcon(color, label) {
+  return L.divIcon({
+    className: "",
+    html: `<div class="pin" style="background:${color}"><span>${esc(label)}</span></div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 26],
+  });
+}
+
+function renderMarkers() {
+  if (!state.map) return;
+  for (const id in state.markers) { state.map.removeLayer(state.markers[id]); }
+  state.markers = {};
+  const pts = [];
+  const numByDay = {};
+  for (const s of state.stops) {
+    if (s.lat == null || s.lng == null) continue;
+    numByDay[s.day_index] = (numByDay[s.day_index] || 0) + 1;
+    const cat = CATEGORIES[s.category] || CATEGORIES.other;
+    const label = s.day_index > 0 ? String(numByDay[s.day_index]) : "★";
+    const m = L.marker([s.lat, s.lng], { icon: makePinIcon(cat.color, label) }).addTo(state.map);
+    m.bindPopup(`<b>${esc(s.name)}</b><br>${cat.emoji} ${cat.label}${s.day_index > 0 ? " · Day " + s.day_index : " · Idea"}`);
+    m.on("click", () => highlightStop(s.id, false));
+    state.markers[s.id] = m;
+    pts.push([s.lat, s.lng]);
+  }
+  if (pts.length && !state._fitted) {
+    state.map.fitBounds(pts, { padding: [40, 40], maxZoom: 14 });
+    state._fitted = true;
+  }
+  renderRouteLines();
+  renderSuggestionMarkers();
+}
+
+function renderSuggestionMarkers() {
+  if (!state.map) return;
+  (state.sugMarkers || []).forEach(m => state.map.removeLayer(m));
+  state.sugMarkers = [];
+  if (state.tab !== "sugg" && !state.scouting) return; // during a scout, show finds live on any tab
+  const now = (typeof performance !== "undefined" ? performance.now() : 0);
+  for (const g of (state.suggestions || [])) {
+    if (g.status !== "suggested" || g.lat == null || g.lng == null) continue;
+    const cat = CATEGORIES[g.kind] || CATEGORIES.other;
+    const fresh = g._revealedAt && (now - g._revealedAt) < 700;
+    const icon = L.divIcon({
+      className: "",
+      html: `<div class="${fresh ? "pin-pop" : ""}"><div class="sugg-pin" style="border-color:${cat.color}"><span>${cat.emoji}</span></div></div>`,
+      iconSize: [22, 22], iconAnchor: [11, 20],
+    });
+    const m = L.marker([g.lat, g.lng], { icon, opacity: 0.9 }).addTo(state.map);
+    m.bindPopup(`<b>${esc(g.name)}</b><br>${cat.emoji} ${esc(g.area || "")}${g.est_cost != null ? "<br>" + money(g.est_cost) + (g.cost_note ? " " + esc(g.cost_note) : "") : ""}`);
+    state.sugMarkers.push(m);
+  }
+}
+
+/* ---------- suggestions panel ---------- */
+const KIND_GROUPS = [
+  ["sight", "🏛️ Things to see"],
+  ["activity", "🎯 Things to do"],
+  ["food", "🍜 Where to eat"],
+  ["lodging", "🛏️ Where to stay"],
+  ["transit", "🚆 Getting around"],
+  ["other", "📍 More ideas"],
+];
+
+function renderSuggestions() {
+  if (!state.trip) return;
+  const wrap = $("suggestions");
+  wrap.innerHTML = "";
+  const live = (state.suggestions || []).filter(g => g.status === "suggested");
+  const added = (state.suggestions || []).filter(g => g.status === "added");
+  $("sugg-badge").innerHTML = live.length ? `<span class="sugg-badge">${live.length}</span>` : "";
+  if (state.scouting) {
+    const note = document.createElement("div");
+    note.className = "sugg-scouting";
+    note.innerHTML = `<span class="spin"></span> Scouting — watch the map, finds drop in live as they turn up…`;
+    wrap.appendChild(note);
+  }
+  if (!live.length && !added.length) {
+    if (state.scouting) return;
+    wrap.innerHTML = `<div class="sugg-empty">No suggestions yet for this trip.<br><br>
+      Add your first stop (search a place or click the map) and the app will automatically scout
+      the surrounding area for things to see, places to eat, and hotels.<br><br>
+      For curated picks with researched prices, ask Claude in your Cowork session — they
+      appear here live.</div>`;
+    return;
+  }
+  if (live.length) {
+    const bar = document.createElement("div");
+    bar.className = "sugg-topbar";
+    bar.innerHTML = `<button class="btn primary" title="Slot every available idea into the schedule">⚡ Slot all of these into the schedule</button>`;
+    bar.querySelector("button").onclick = autoPlan;
+    wrap.appendChild(bar);
+  }
+  for (const [kind, title] of KIND_GROUPS) {
+    const items = live.filter(g => g.kind === kind);
+    if (!items.length) continue;
+    const titleEl = document.createElement("div");
+    titleEl.className = "sugg-group-title";
+    titleEl.textContent = title;
+    wrap.appendChild(titleEl);
+    for (const g of items) wrap.appendChild(suggCard(g));
+  }
+  if (added.length) {
+    const titleEl = document.createElement("div");
+    titleEl.className = "sugg-group-title";
+    titleEl.textContent = "✓ Already added";
+    wrap.appendChild(titleEl);
+    for (const g of added) wrap.appendChild(suggCard(g, true));
+  }
+}
+
+/* ---------- auto-suggestions (OpenStreetMap/Overpass) ---------- */
+async function maybeAutoSuggest() {
+  if (!state.trip) return;
+  if ((state.suggestions || []).length) return;              // already has suggestions (incl. concierge picks)
+  state._autoTried = state._autoTried || {};
+  if (state._autoTried[state.trip.id]) return;
+
+  // anchor: first stop with coords, else the trip destination (if it's a city-scale area)
+  let anchor = state.stops.find(s => s.lat != null && s.lng != null);
+  if (!anchor && state.trip.dest_lat != null && state.trip.dest_lng != null) {
+    const b = state.trip.dest_bbox;
+    const tooBroad = b && b.length === 4 && (Math.abs(+b[1] - +b[0]) > 1.5 || Math.abs(+b[3] - +b[2]) > 1.5);
+    if (!tooBroad) anchor = { lat: state.trip.dest_lat, lng: state.trip.dest_lng };
+  }
+  if (!anchor) return;
+
+  state._autoTried[state.trip.id] = true;
+  const ctl = new AbortController();
+  state.scoutAbort = ctl;
+  setScoutStatus(true);
+  toast("✨ Scouting the area for suggestions…");
+  try {
+    const n = await autoSuggest(state.trip.id, anchor.lat, anchor.lng, 6000, ctl.signal);
+    if (n > 0) {
+      await reloadTripData();
+      toast(`✨ Found ${n} suggestions nearby — check the Suggestions tab`);
+    } else if (state._scoutFailed > 0) {
+      toast("The map service is busy right now — wait a minute, then hit ✨ Scout this area");
+    } else {
+      toast("Scouting finished — nothing found right here. Try the Scout button on a town or city.");
+    }
+  } catch (e) {
+    if (ctl.signal.aborted) return; // user hit stop — stopScout already toasted
+    console.warn("auto-suggest failed", e);
+    toast("Scouting didn't finish — hit ✨ Scout this area to retry");
+  } finally { setScoutStatus(false); }
+}
+
+function setScoutStatus(active) {
+  state.scouting = active;
+  const btn = $("scout-btn");
+  if (active) {
+    state.scoutFound = 0;
+    btn.classList.add("scouting");
+    btn.innerHTML = `<span class="spin"></span>Scouting the area…<span class="stop-x">✕ stop</span>`;
+    btn.title = "Stop scouting so you can move the map and try elsewhere";
+  } else {
+    btn.classList.remove("scouting");
+    btn.innerHTML = `✨ Scout this area`;
+    btn.title = "Search this area for things to do, eat, and stay";
+  }
+  renderSuggestions();
+  renderSuggestionMarkers(); // scout over + not on Suggestions tab → tidy the live pins away
+}
+
+function stopScout() {
+  if (state.scoutAbort) state.scoutAbort.abort();
+  const n = state.scoutFound || 0;
+  toast(n ? `Scouting stopped — kept the ${n} found so far. Move the map and scout again anytime.`
+          : "Scouting stopped — move the map and scout again whenever you like");
+}
+
+/* manual scout of whatever area the map is showing — radius follows the current view */
+async function scoutHere() {
+  if (!state.trip || !state.map) return;
+  const c = state.map.getCenter();
+  // cover roughly what's on screen: distance from center to a corner, clamped 3–25 km
+  const ne = state.map.getBounds().getNorthEast();
+  const radius = Math.round(Math.min(25000, Math.max(3000, state.map.distance(c, ne) * 0.7)));
+  const ctl = new AbortController();
+  state.scoutAbort = ctl;
+  setScoutStatus(true);
+  try {
+    const n = await autoSuggest(state.trip.id, c.lat, c.lng, radius, ctl.signal);
+    await reloadTripData();
+    if (n > 0) { setTab("sugg"); toast(`✨ Done — ${n} new suggestions here`); }
+    else if (state._scoutFailed > 0) toast("The map service is busy right now — wait a minute and scout again");
+    else toast("Scouting finished — nothing new in this view. Try zooming to a town or city.");
+  } catch (e) {
+    if (!ctl.signal.aborted) toast("Scouting failed — try again in a moment");
+  }
+  finally { setScoutStatus(false); }
+}
+
+async function autoSuggest(tripId, lat, lng, radius = 6000, signal = null) {
+  const aborted = () => { const e = new Error("scout aborted"); e.name = "AbortError"; return e; };
+  // area name via reverse geocode (best effort)
+  let area = "Nearby";
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=10`, { signal });
+    const j = await r.json();
+    const a = j.address || {};
+    area = a.city || a.town || a.village || a.county || j.name || "Nearby";
+  } catch (e) {}
+  if (signal && signal.aborted) throw aborted();
+
+  // three category searches, results streaming onto the map as each lands.
+  // Dense cities (Tokyo!) need care: food/lodging use tighter radii and node-only food,
+  // "qt" output skips expensive sorting, and a hard deadline guarantees the scout ends.
+  const Q = (body, cap) => `[out:json][timeout:15];(${body});out tags center qt ${cap};`;
+  // single-clause / exact-tag queries — regex unions are too slow in dense cities like Tokyo.
+  // the broad [tourism] sweep over-fetches (signposts etc.); classifyElements filters client-side.
+  const mkSights = (r) => `nwr(around:${r},${lat},${lng})[tourism][name];`;
+  const mkFood = (r) => `node(around:${r},${lat},${lng})[amenity=restaurant][name];node(around:${r},${lat},${lng})[amenity=cafe][name];`;
+  const mkLodge = (r) => `nwr(around:${r},${lat},${lng})[tourism=hotel][name];nwr(around:${r},${lat},${lng})[tourism=guest_house][name];`;
+  const searches = [
+    { kinds: { sight: 5, activity: 3 }, make: mkSights, r: radius, cap: 150 },
+    { kinds: { food: 4 },               make: mkFood,   r: Math.min(radius, 2500), cap: 60 },
+    { kinds: { lodging: 3 },            make: mkLodge,  r: Math.min(radius, 4000), cap: 60 },
+  ];
+  const deadline = Date.now() + 50000; // whole scout wraps up inside ~50s, keeping whatever it found
+
+  const seen = new Set([
+    ...state.stops.map(s => s.name.toLowerCase()),
+    ...(state.suggestions || []).map(g => g.name.toLowerCase()),
+  ]);
+
+  // sequential (public Overpass servers rate-limit concurrent queries) — each
+  // category's finds stream onto the map while the next category is searching
+  let total = 0, failed = 0;
+  for (let i = 0; i < searches.length; i++) {
+    const grp = searches[i];
+    if (Date.now() > deadline) break;
+    if (i > 0) await new Promise(r => setTimeout(r, 700)); // pace requests — public servers rate-limit bursts
+    if (signal && signal.aborted) break;
+    let els = null;
+    try { els = await fetchOverpass(Q(grp.make(grp.r), grp.cap), signal, i, deadline); }
+    catch (e) { if (signal && signal.aborted) break; }
+    if (els === null && !(signal && signal.aborted) && Date.now() < deadline) {
+      // dense area or busy server — try once more with half the radius
+      const r2 = Math.max(1200, Math.round(grp.r / 2));
+      try { els = await fetchOverpass(Q(grp.make(r2), grp.cap), signal, i + 1, deadline); }
+      catch (e) { if (signal && signal.aborted) break; }
+    }
+    if (els === null) { failed++; continue; }
+    if (signal && signal.aborted) break;
+
+    const picks = classifyElements(els, grp.kinds, seen, area, tripId);
+    if (!picks.length) continue;
+    const rows = picks.map(({ _score, ...row }) => row);
+    const { data, error } = await sb.from("trip_suggestions").insert(rows).select();
+    if (error) { console.error(error); continue; }
+    const inserted = (data && data.length) ? data : rows;
+    total += inserted.length;
+    revealSuggestions(inserted, signal); // don't block the next search on the reveal animation
+  }
+  if (signal && signal.aborted) throw aborted();
+  state._scoutFailed = failed;
+  if (failed === searches.length) throw new Error("all overpass endpoints failed");
+  return total;
+}
+
+async function fetchOverpass(query, signal, rotate = 0, deadline = 0) {
+  const base = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+  ];
+  const endpoints = base.slice(rotate % base.length).concat(base.slice(0, rotate % base.length));
+  for (let round = 0; round < 2; round++) {
+    if (round > 0) await new Promise(r => setTimeout(r, 2000)); // back off before a retry round
+    for (const ep of endpoints) {
+      if (deadline && Date.now() > deadline) return null;
+      if (signal && signal.aborted) { const err = new Error("scout aborted"); err.name = "AbortError"; throw err; }
+      try {
+        const res = await fetch(`${ep}?data=${encodeURIComponent(query)}`, {
+          headers: { "Accept": "application/json" },
+          signal,
+        });
+        if (!res.ok) continue;
+        const data = await res.json();
+        if (data.remark && !(data.elements || []).length) continue; // timed-out empty result
+        return data.elements || [];
+      } catch (e) {
+        if (signal && signal.aborted) { const err = new Error("scout aborted"); err.name = "AbortError"; throw err; }
+      }
+    }
+  }
+  return null;
+}
+
+function classifyElements(els, caps, seen, area, tripId) {
+  const buckets = {};
+  for (const k in caps) buckets[k] = [];
+  for (const e of els) {
+    const t = e.tags || {};
+    const name = t.name;
+    const plat = e.lat ?? (e.center && e.center.lat);
+    const plng = e.lon ?? (e.center && e.center.lon);
+    if (!name || plat == null || seen.has(name.toLowerCase())) continue;
+
+    let kind, desc = [], cost = null, costNote = null;
+    const tour = t.tourism, amen = t.amenity;
+    if (["museum", "gallery", "attraction", "viewpoint"].includes(tour)) {
+      kind = "sight";
+      desc.push({ museum: "Museum", gallery: "Art gallery", attraction: "Local attraction", viewpoint: "Scenic viewpoint" }[tour]);
+    } else if (["zoo", "aquarium", "theme_park"].includes(tour)) {
+      kind = "activity";
+      desc.push({ zoo: "Zoo", aquarium: "Aquarium", theme_park: "Theme park" }[tour]);
+    } else if (amen === "restaurant" || amen === "cafe") {
+      kind = "food";
+      const cuisine = (t.cuisine || "").split(";")[0].replace(/_/g, " ");
+      desc.push(cuisine ? `${cuisine.charAt(0).toUpperCase() + cuisine.slice(1)} ${amen}` : (amen === "cafe" ? "Café" : "Restaurant"));
+    } else if (tour === "hotel" || tour === "guest_house") {
+      kind = "lodging";
+      const stars = parseFloat(t.stars);
+      desc.push(stars ? `${t.stars}-star ${tour === "hotel" ? "hotel" : "guest house"}` : (tour === "hotel" ? "Hotel" : "Guest house"));
+      if (stars >= 4) { cost = 180; costNote = "per night, rough est."; }
+      else if (stars >= 3) { cost = 120; costNote = "per night, rough est."; }
+    } else continue;
+    if (!(kind in buckets)) continue;
+    seen.add(name.toLowerCase());
+
+    if (t.fee === "no") { cost = 0; costNote = "free entry"; }
+    if (t["opening_hours"] && kind !== "lodging") desc.push("see hours locally");
+    const notable = ("wikipedia" in t || "wikidata" in t ? 3 : 0) + (t.website || t["contact:website"] ? 1 : 0) + (t.stars ? 1 : 0);
+
+    buckets[kind].push({
+      trip_id: tripId, kind, name: name.slice(0, 120),
+      description: desc.join(" · ") + " (found nearby on the map)",
+      area, est_cost: cost, cost_note: costNote,
+      lat: plat, lng: plng,
+      address: t["addr:street"] ? `${t["addr:housenumber"] || ""} ${t["addr:street"]}`.trim() + (t["addr:city"] ? ", " + t["addr:city"] : "") : null,
+      _score: notable,
+    });
+  }
+  const picks = [];
+  for (const k in caps) {
+    buckets[k].sort((a, b) => b._score - a._score);
+    picks.push(...buckets[k].slice(0, caps[k]));
+  }
+  return picks;
+}
+
+/* drop freshly-found suggestions onto the map one at a time */
+async function revealSuggestions(rows, signal) {
+  for (const row of rows) {
+    if (!state.trip || row.trip_id !== state.trip.id) return;
+    state.suggestions = state.suggestions || [];
+    if (!state.suggestions.some(g => g.id === row.id)) {
+      row._revealedAt = (typeof performance !== "undefined" ? performance.now() : 0);
+      state.suggestions.unshift(row); // newest first, matching the panel sort
+      state.scoutFound = (state.scoutFound || 0) + 1;
+    }
+    renderSuggestionMarkers();
+    renderSuggestions();
+    if (state.scouting) {
+      $("scout-btn").innerHTML = `<span class="spin"></span>Scouting… ${state.scoutFound} found<span class="stop-x">✕ stop</span>`;
+    }
+    if (!(signal && signal.aborted)) await new Promise(r => setTimeout(r, 230));
+  }
+}
+
+function suggCostLabel(g) {
+  if (g.est_cost == null) return "";
+  if (g.est_cost === 0) {
+    const note = g.cost_note || "Free";
+    return esc(note.charAt(0).toUpperCase() + note.slice(1));
+  }
+  return money(g.est_cost) + (g.cost_note ? " " + esc(g.cost_note) : "");
+}
+
+function suggCard(g, isAdded = false) {
+  const card = document.createElement("div");
+  card.className = "sugg-card" + (isAdded ? " added" : "");
+  card.innerHTML = `
+    <div class="sugg-head">
+      <span class="sugg-name">${esc(g.name)}</span>
+      <span class="sugg-cost">${suggCostLabel(g)}</span>
+    </div>
+    ${g.area ? `<div class="sugg-area">${esc(g.area)}</div>` : ""}
+    ${g.description ? `<div class="sugg-desc">${esc(g.description)}</div>` : ""}
+    ${isAdded ? "" : `<div class="sugg-actions">
+      <button class="btn primary sugg-add">＋ Add to trip</button>
+      <button class="btn sugg-dismiss">Dismiss</button>
+    </div>`}`;
+  if (!isAdded) {
+    card.querySelector(".sugg-add").onclick = () => {
+      openStopForm({
+        name: g.name, lat: g.lat, lng: g.lng, address: g.address || g.area || "",
+        category: CATEGORIES[g.kind] ? g.kind : "other",
+        cost: g.est_cost, notes: g.description ? g.description.slice(0, 140) : null,
+        onSaved: async () => {
+          await sb.from("trip_suggestions").update({ status: "added" }).eq("id", g.id);
+          await reloadTripData();
+        },
+      });
+    };
+    card.querySelector(".sugg-dismiss").onclick = async () => {
+      await sb.from("trip_suggestions").update({ status: "dismissed" }).eq("id", g.id);
+      await reloadTripData();
+    };
+  }
+  return card;
+}
+
+function renderRouteLines() {
+  if (!state.map) return;
+  (state.routeLines || []).forEach(l => state.map.removeLayer(l));
+  state.routeLines = [];
+  const byDay = {};
+  for (const s of state.stops) {
+    if (s.day_index < 1 || s.lat == null || s.lng == null) continue;
+    (byDay[s.day_index] = byDay[s.day_index] || []).push(s);
+  }
+  for (const d in byDay) {
+    const pts = byDay[d].sort((a, b) => a.order_index - b.order_index).map(s => [s.lat, s.lng]);
+    if (pts.length < 2) continue;
+    const color = DAY_COLORS[(d - 1) % DAY_COLORS.length];
+    const line = L.polyline(pts, { color, weight: 3, opacity: 0.65, dashArray: "6 8" }).addTo(state.map);
+    line.bindTooltip(`Day ${d} route`, { sticky: true });
+    state.routeLines.push(line);
+  }
+}
+
+function highlightStop(id, panMap = true) {
+  state.highlightId = id;
+  document.querySelectorAll(".stop-card").forEach(el => el.classList.toggle("highlight", el.dataset.id === id));
+  const card = document.querySelector(`.stop-card[data-id="${id}"]`);
+  if (card) card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  const s = state.stops.find(x => x.id === id);
+  if (panMap && s && s.lat != null && state.map) {
+    state.map.panTo([s.lat, s.lng]);
+    const m = state.markers[id];
+    if (m) m.openPopup();
+  }
+}
+
+function onMapClick(latlng) {
+  if (!state.trip) return;
+  openStopForm({
+    name: "",
+    lat: latlng.lat, lng: latlng.lng,
+    address: `${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}`,
+    fromMapClick: true,
+  });
+}
+
+/* ---------- search (Nominatim) ---------- */
+async function doSearch() {
+  const q = $("search-input").value.trim();
+  if (!q) return;
+  const box = $("search-results");
+  box.innerHTML = `<div class="search-result">Searching…</div>`;
+  box.classList.add("open");
+  try {
+    // 1) search ONLY within the current map view ("restaurants" = restaurants on screen)
+    let data = [], scoped = false;
+    if (state.map) {
+      const b = state.map.getBounds();
+      const viewbox = `${b.getWest()},${b.getNorth()},${b.getEast()},${b.getSouth()}`;
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=8&bounded=1&viewbox=${viewbox}&q=${encodeURIComponent(q)}`, { headers: { "Accept": "application/json" } });
+      data = await res.json();
+      scoped = true;
+    }
+    // 2) nothing in view → fall back to destination-biased, then global search
+    let fallback = false;
+    if (!data.length) {
+      fallback = true;
+      const candidates = [];
+      const dest = (state.trip.destination || "").trim();
+      const destCity = dest.split(",")[0].trim().toLowerCase();
+      if (dest && destCity && !q.toLowerCase().includes(destCity)) candidates.push(`${q}, ${dest}`);
+      candidates.push(q);
+      for (const cq of candidates) {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&q=${encodeURIComponent(cq)}`, { headers: { "Accept": "application/json" } });
+        data = await res.json();
+        if (data.length) break;
+      }
+    }
+    box.classList.add("open");
+    if (!data.length) { box.innerHTML = `<div class="search-result">No results — try a different phrasing.</div>`; return; }
+    box.innerHTML = "";
+    if (scoped && fallback) {
+      const note = document.createElement("div");
+      note.className = "search-result";
+      note.style.cssText = "font-size:11.5px;color:var(--ink-soft);cursor:default";
+      note.textContent = "Nothing matching in the current map view — results from elsewhere:";
+      box.appendChild(note);
+    }
+    for (const r of data) {
+      const el = document.createElement("div");
+      el.className = "search-result";
+      const parts = r.display_name.split(",");
+      el.innerHTML = `<div class="sr-name">${esc(parts[0])}</div><div class="sr-addr">${esc(parts.slice(1).join(",").trim())}</div>`;
+      el.onclick = () => {
+        box.classList.remove("open");
+        openStopForm({ name: parts[0].trim(), lat: +r.lat, lng: +r.lon, address: r.display_name });
+      };
+      box.appendChild(el);
+    }
+  } catch (e) {
+    console.error(e);
+    box.innerHTML = `<div class="search-result">Search unavailable right now.</div>`;
+  }
+}
+$("search-btn").onclick = doSearch;
+$("search-input").addEventListener("keydown", (e) => { if (e.key === "Enter") doSearch(); });
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".search-wrap")) {
+    $("search-results").classList.remove("open");
+  }
+});
+
+/* ---------- stops ---------- */
+function openStopForm(pre, existing = null) {
+  const dayCount = tripDayCount(state.trip);
+  let dayOptions = `<option value="0">💡 Ideas (unscheduled)</option>`;
+  for (let d = 1; d <= dayCount; d++) {
+    dayOptions += `<option value="${d}" ${existing && existing.day_index === d ? "selected" : ""}>Day ${d}${dayDate(state.trip, d) ? " · " + dayDate(state.trip, d) : ""}</option>`;
+  }
+  let catOptions = "";
+  const defaultCat = existing ? existing.category : (pre.category || "sight");
+  for (const k in CATEGORIES) {
+    const sel = defaultCat === k ? "selected" : "";
+    catOptions += `<option value="${k}" ${sel}>${CATEGORIES[k].emoji} ${CATEGORIES[k].label}</option>`;
+  }
+  openModal(`
+    <h2>${existing ? "Edit stop" : "Add stop"}</h2>
+    <div class="field"><label>Name</label><input id="m-sname" value="${esc(existing ? existing.name : pre.name)}" placeholder="Name this stop"></div>
+    <div class="field"><label>Where</label><input id="m-saddr" value="${esc(existing ? (existing.address || "") : pre.address)}" readonly style="color:var(--ink-soft)"></div>
+    <div class="field-row">
+      <div class="field"><label>Day</label><select id="m-sday">${dayOptions}</select></div>
+      <div class="field"><label>Category</label><select id="m-scat">${catOptions}</select></div>
+    </div>
+    <div class="field-row" id="m-lodgerow" style="display:none">
+      <div class="field"><label>Check-out day</label><select id="m-sout"></select></div>
+      <div class="field" style="flex:1.4;display:flex;align-items:flex-end;padding-bottom:9px"><span id="m-nights" style="font-size:12px;color:var(--ink-soft)"></span></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Cost (${esc((state.trip && state.trip.currency) || "USD")}, optional)</label><input id="m-scost" type="number" min="0" step="any" value="${existing && existing.cost != null ? existing.cost : (pre && pre.cost != null ? pre.cost : "")}" placeholder="0"></div>
+      <div class="field" style="flex:2"><label>Notes</label><textarea id="m-snotes" rows="2" placeholder="Reservations, tips, links…">${esc(existing ? (existing.notes || "") : (pre.notes || ""))}</textarea></div>
+    </div>
+    <div class="modal-actions">
+      ${existing ? '<button class="btn danger" id="m-sdelete" style="margin-right:auto">Delete</button>' : ""}
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" id="m-ssave">${existing ? "Save" : "Add stop"}</button>
+    </div>`);
+  $("m-sname").focus();
+
+  // lodging = a stay: pick the check-out day; cost is per night
+  const syncLodging = () => {
+    const isLodge = $("m-scat").value === "lodging";
+    const day = parseInt($("m-sday").value, 10);
+    const show = isLodge && day >= 1;
+    $("m-lodgerow").style.display = show ? "" : "none";
+    if (!show) return;
+    const cur = parseInt($("m-sout").value, 10) || (existing && existing.end_day) || dayCount;
+    let opts = "";
+    for (let dd = Math.min(day + 1, dayCount); dd <= dayCount; dd++) {
+      opts += `<option value="${dd}">Day ${dd}${dayDate(state.trip, dd) ? " · " + dayDate(state.trip, dd) : ""}</option>`;
+    }
+    $("m-sout").innerHTML = opts;
+    const sel = Math.min(Math.max(cur, Math.min(day + 1, dayCount)), dayCount);
+    $("m-sout").value = String(sel);
+    const nights = Math.max(1, sel - day);
+    const cost = parseFloat($("m-scost").value);
+    $("m-nights").textContent = `${nights} night${nights > 1 ? "s" : ""}${!isNaN(cost) && cost > 0 ? " · " + money(cost * nights) + " total" : ""}`;
+  };
+  $("m-scat").addEventListener("change", syncLodging);
+  $("m-sday").addEventListener("change", syncLodging);
+  $("m-sout").addEventListener("change", syncLodging);
+  $("m-scost").addEventListener("input", syncLodging);
+  syncLodging();
+
+  $("m-ssave").onclick = async () => {
+    const name = $("m-sname").value.trim();
+    if (!name) { toast("Name the stop"); return; }
+    const dayIndex = parseInt($("m-sday").value, 10);
+    const costRaw = $("m-scost").value.trim();
+    const isLodge = $("m-scat").value === "lodging";
+    const endDay = isLodge && dayIndex >= 1
+      ? Math.min(Math.max(parseInt($("m-sout").value, 10) || dayCount, Math.min(dayIndex + 1, dayCount)), dayCount)
+      : null;
+    const patch = {
+      name,
+      category: $("m-scat").value,
+      day_index: dayIndex,
+      end_day: endDay,
+      notes: $("m-snotes").value.trim() || null,
+      cost: costRaw === "" ? null : Math.max(0, parseFloat(costRaw) || 0),
+    };
+    if (existing) {
+      if (dayIndex !== existing.day_index) {
+        patch.order_index = state.stops.filter(s => s.day_index === dayIndex).length;
+      }
+      const { error } = await sb.from("trip_stops").update(patch).eq("id", existing.id);
+      if (error) { toast("Couldn't save"); console.error(error); return; }
+    } else {
+      const row = {
+        ...patch,
+        trip_id: state.trip.id,
+        lat: pre.lat, lng: pre.lng,
+        address: pre.address || null,
+        order_index: state.stops.filter(s => s.day_index === dayIndex).length,
+      };
+      const { error } = await sb.from("trip_stops").insert(row);
+      if (error) { toast("Couldn't add stop"); console.error(error); return; }
+    }
+    closeModal();
+    if (!existing && pre && pre.onSaved) await pre.onSaved();
+    await reloadTripData();
+    toast(existing ? "Stop updated" : "Stop added ✓");
+    if (!existing) maybeAutoSuggest();
+  };
+  if (existing) {
+    $("m-sdelete").onclick = async () => {
+      const { error } = await sb.from("trip_stops").delete().eq("id", existing.id);
+      if (error) { toast("Couldn't delete"); return; }
+      closeModal();
+      await reloadTripData();
+      toast("Stop removed");
+    };
+  }
+}
+
+async function moveStop(stop, dir) {
+  const siblings = state.stops.filter(s => s.day_index === stop.day_index).sort((a, b) => a.order_index - b.order_index);
+  const idx = siblings.findIndex(s => s.id === stop.id);
+  const swapWith = siblings[idx + dir];
+  if (!swapWith) return;
+  await Promise.all([
+    sb.from("trip_stops").update({ order_index: swapWith.order_index }).eq("id", stop.id),
+    sb.from("trip_stops").update({ order_index: stop.order_index }).eq("id", swapWith.id),
+  ]);
+  await reloadTripData();
+}
+
+async function setStopDay(stop, dayIndex) {
+  const orderIndex = state.stops.filter(s => s.day_index === dayIndex).length;
+  await sb.from("trip_stops").update({ day_index: dayIndex, order_index: orderIndex }).eq("id", stop.id);
+  await reloadTripData();
+}
+
+/* ---------- votes ---------- */
+function voteSummary(stopId) {
+  const vs = state.votes.filter(v => v.stop_id === stopId);
+  return {
+    up: vs.filter(v => v.value === 1).length,
+    down: vs.filter(v => v.value === -1).length,
+    mine: state.voterName ? (vs.find(v => v.voter_name === state.voterName)?.value ?? 0) : 0,
+  };
+}
+
+async function castVote(stopId, value) {
+  const name = ensureVoter();
+  if (!name) return;
+  const existing = state.votes.find(v => v.stop_id === stopId && v.voter_name === name);
+  if (existing && existing.value === value) {
+    await sb.from("trip_votes").delete().eq("id", existing.id);
+  } else if (existing) {
+    await sb.from("trip_votes").update({ value }).eq("id", existing.id);
+  } else {
+    await sb.from("trip_votes").insert({ stop_id: stopId, voter_name: name, value, trip_id: state.trip.id });
+  }
+  await reloadTripData();
+}
+
+/* ---------- drag & drop ---------- */
+let dragId = null;
+const dropSlot = document.createElement("div");
+dropSlot.className = "drop-slot active";
+
+function sectionDragOver(e, section) {
+  if (!dragId) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  section.classList.add("drag-over");
+  const cards = [...section.querySelectorAll(".stop-card:not(.dragging)")];
+  let before = null;
+  for (const c of cards) {
+    const r = c.getBoundingClientRect();
+    if (e.clientY < r.top + r.height / 2) { before = c; break; }
+  }
+  if (before) section.insertBefore(dropSlot, before);
+  else section.appendChild(dropSlot);
+}
+
+async function sectionDrop(e, dayIndex) {
+  e.preventDefault();
+  const stop = state.stops.find(s => s.id === dragId);
+  if (!stop) return;
+  // index = number of non-dragging cards above the slot
+  let idx = 0;
+  let el = dropSlot.previousElementSibling;
+  while (el) {
+    if (el.classList && el.classList.contains("stop-card") && !el.classList.contains("dragging")) idx++;
+    el = el.previousElementSibling;
+  }
+  cleanupDrag();
+  await persistMove(stop, dayIndex, idx);
+}
+
+function cleanupDrag() {
+  dragId = null;
+  dropSlot.remove();
+  document.querySelectorAll(".day-section").forEach(s => s.classList.remove("drag-over"));
+  document.querySelectorAll(".stop-card.dragging").forEach(c => c.classList.remove("dragging"));
+}
+
+async function persistMove(stop, newDay, newIndex) {
+  // reorder locally first (optimistic)
+  const target = state.stops
+    .filter(s => s.day_index === newDay && s.id !== stop.id)
+    .sort((a, b) => a.order_index - b.order_index);
+  target.splice(Math.min(newIndex, target.length), 0, stop);
+  const source = stop.day_index !== newDay
+    ? state.stops.filter(s => s.day_index === stop.day_index && s.id !== stop.id).sort((a, b) => a.order_index - b.order_index)
+    : null;
+  stop.day_index = newDay;
+  const updates = [];
+  target.forEach((s, i) => { if (s.order_index !== i || s.id === stop.id) { s.order_index = i; updates.push(sb.from("trip_stops").update({ day_index: s.day_index, order_index: i }).eq("id", s.id)); } });
+  if (source) source.forEach((s, i) => { if (s.order_index !== i) { s.order_index = i; updates.push(sb.from("trip_stops").update({ order_index: i }).eq("id", s.id)); } });
+  renderItinerary();
+  renderMarkers();
+  await Promise.all(updates);
+  await reloadTripData();
+}
+
+/* ---------- itinerary render ---------- */
+function renderItinerary() {
+  if (!state.trip) return;
+  const wrap = $("itinerary");
+  wrap.innerHTML = "";
+  const dayCount = tripDayCount(state.trip);
+  const days = [0];
+  for (let d = 1; d <= dayCount; d++) days.push(d);
+  let tripTotal = 0;
+  let anyCost = false;
+
+  const plannable = plannableCount();
+  if (plannable > 0) {
+    const bar = document.createElement("div");
+    bar.className = "autoplan-bar";
+    bar.innerHTML = `<button class="btn primary" title="Slot every available idea into the schedule">⚡ Auto-build schedule · ${plannable} idea${plannable > 1 ? "s" : ""} ready</button>`;
+    bar.querySelector("button").onclick = autoPlan;
+    wrap.appendChild(bar);
+  }
+
+  for (const d of days) {
+    const stops = state.stops.filter(s => s.day_index === d).sort((a, b) => a.order_index - b.order_index);
+    if (d === 0 && stops.length === 0 && !dragId) continue; // hide empty ideas bucket
+    const section = document.createElement("div");
+    section.className = "day-section";
+    section.dataset.day = d;
+    const title = d === 0 ? "💡 Ideas" : `Day ${d}`;
+    const date = d === 0 ? "" : dayDate(state.trip, d);
+    // lodging costs count per NIGHT stayed (check-in day through the night before check-out)
+    let dayTotal = stops.reduce((sum, s) => sum + (d > 0 && s.category === "lodging" ? 0 : (s.cost || 0)), 0);
+    if (d > 0) for (const L of state.stops) {
+      if (L.category !== "lodging" || L.day_index < 1 || L.cost == null) continue;
+      const out = Math.max(L.end_day || L.day_index + 1, L.day_index + 1);
+      if (d >= L.day_index && d < out) dayTotal += L.cost;
+    }
+    if (d > 0) tripTotal += dayTotal;
+    if (dayTotal > 0) anyCost = true;
+    section.innerHTML = `
+      <div class="day-header">
+        <span class="day-title">${title}</span>
+        <span class="day-date">${esc(date)}</span>
+        <span class="day-count">${dayTotal > 0 ? `<span class="day-total">${money(dayTotal)}</span> · ` : ""}${stops.length ? stops.length + " stop" + (stops.length > 1 ? "s" : "") : ""}</span>
+      </div>`;
+    if (!stops.length) {
+      section.innerHTML += `<div class="empty-day">Nothing planned — search a place, click the map, or drag a stop here.</div>`;
+    }
+    section.addEventListener("dragover", (e) => sectionDragOver(e, section));
+    section.addEventListener("drop", (e) => sectionDrop(e, d));
+    let num = 0;
+    for (const s of stops) {
+      num++;
+      const cat = CATEGORIES[s.category] || CATEGORIES.other;
+      const vs = voteSummary(s.id);
+      const card = document.createElement("div");
+      card.className = "stop-card";
+      card.dataset.id = s.id;
+      card.draggable = true;
+      let dayOpts = `<option value="0" ${d === 0 ? "selected" : ""}>💡 Ideas</option>`;
+      for (let dd = 1; dd <= dayCount; dd++) dayOpts += `<option value="${dd}" ${dd === d ? "selected" : ""}>Day ${dd}</option>`;
+      const nights = s.category === "lodging" && d > 0
+        ? Math.max(1, (s.end_day || s.day_index + 1) - s.day_index) : 0;
+      const costChip = s.cost != null
+        ? `<span class="cost-chip">${nights ? `${money(s.cost)}/night · ${nights} night${nights > 1 ? "s" : ""}` : money(s.cost)}</span>` : "";
+      const stayChip = nights ? `<span class="cost-chip" style="background:#eef4f4">🛏️ thru Day ${Math.max(s.end_day || s.day_index + 1, s.day_index + 1)}</span>` : "";
+      card.innerHTML = `
+        <div class="stop-num" style="background:${cat.color}">${d === 0 ? "★" : num}</div>
+        <div class="stop-body">
+          <div class="stop-name">${cat.emoji} ${esc(s.name)}${costChip}${stayChip}</div>
+          ${s.address ? `<div class="stop-addr">${esc(s.address)}</div>` : ""}
+          ${s.notes ? `<div class="stop-notes">${esc(s.notes)}</div>` : ""}
+          <div class="stop-actions">
+            <button class="icon-btn vote-up ${vs.mine === 1 ? "voted" : ""}" title="Vote up">👍 ${vs.up || ""}</button>
+            <button class="icon-btn vote-down ${vs.mine === -1 ? "voted" : ""}" title="Vote down">👎 ${vs.down || ""}</button>
+            <button class="icon-btn mv-up" title="Move up">↑</button>
+            <button class="icon-btn mv-down" title="Move down">↓</button>
+            <button class="icon-btn edit-btn" title="Edit">✏️</button>
+            <select class="day-select">${dayOpts}</select>
+          </div>
+        </div>`;
+      card.addEventListener("dragstart", (e) => {
+        dragId = s.id;
+        card.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+        try { e.dataTransfer.setData("text/plain", s.id); } catch (err) {}
+      });
+      card.addEventListener("dragend", cleanupDrag);
+      card.querySelector(".stop-name").onclick = () => highlightStop(s.id, true);
+      card.querySelector(".vote-up").onclick = () => castVote(s.id, 1);
+      card.querySelector(".vote-down").onclick = () => castVote(s.id, -1);
+      card.querySelector(".mv-up").onclick = () => moveStop(s, -1);
+      card.querySelector(".mv-down").onclick = () => moveStop(s, 1);
+      card.querySelector(".edit-btn").onclick = () => openStopForm(null, s);
+      card.querySelector(".day-select").onchange = (e) => setStopDay(s, parseInt(e.target.value, 10));
+      section.appendChild(card);
+    }
+    // ongoing hotel stays: show on every day after check-in, through check-out
+    if (d > 0) for (const L of state.stops) {
+      if (L.category !== "lodging" || L.day_index < 1 || L.day_index >= d) continue;
+      const out = Math.max(L.end_day || L.day_index + 1, L.day_index + 1);
+      if (d > out) continue;
+      const chip = document.createElement("div");
+      chip.className = "staying-chip";
+      chip.innerHTML = d === out
+        ? `🧳 <b>Check out</b> of ${esc(L.name)}`
+        : `🛏️ Staying at ${esc(L.name)} <span class="staying-night">night ${d - L.day_index + 1}${L.cost != null ? " · " + money(L.cost) : ""}</span>`;
+      chip.onclick = () => highlightStop(L.id, true);
+      section.appendChild(chip);
+    }
+    wrap.appendChild(section);
+  }
+
+  if (anyCost) {
+    const totalEl = document.createElement("div");
+    totalEl.className = "trip-total";
+    totalEl.innerHTML = `<span>Trip budget so far</span><b>${money(tripTotal + state.stops.filter(s => s.day_index === 0).reduce((a, s) => a + (s.cost || 0), 0))}</b>`;
+    wrap.appendChild(totalEl);
+  }
+
+  const footer = document.createElement("div");
+  footer.className = "itinerary-footer";
+  footer.innerHTML = `<span style="font-size:12px;color:var(--ink-soft)">Tip: drag stops between days, or click the map to add one.</span>`;
+  wrap.appendChild(footer);
+}
+
+/* ---------- auto schedule builder ---------- */
+function plannableCount() {
+  const live = (state.suggestions || []).filter(g => g.status === "suggested");
+  const lodgeSeen = new Set();
+  let n = state.stops.filter(s => s.day_index === 0).length;
+  for (const g of live) {
+    if (g.kind === "lodging") {
+      const a = g.area || "";
+      if (lodgeSeen.has(a)) continue; // only one hotel per area gets scheduled
+      lodgeSeen.add(a);
+    }
+    n++;
+  }
+  return n;
+}
+
+function autoPlan() {
+  if (!state.trip) return;
+  const live = (state.suggestions || []).filter(g => g.status === "suggested");
+  const ideas = state.stops.filter(s => s.day_index === 0);
+  if (!live.length && !ideas.length) { toast("Nothing to schedule — scout an area or add ideas first"); return; }
+  const dayCount = tripDayCount(state.trip);
+  const nFood = live.filter(g => g.kind === "food").length;
+  const nLodgeAreas = new Set(live.filter(g => g.kind === "lodging").map(g => g.area || "")).size;
+  const nSights = live.length - nFood - live.filter(g => g.kind === "lodging").length;
+  const bits = [];
+  if (nSights) bits.push(`<b>${nSights}</b> sight${nSights > 1 ? "s" : ""} & activities`);
+  if (nFood) bits.push(`<b>${nFood}</b> place${nFood > 1 ? "s" : ""} to eat`);
+  if (nLodgeAreas) bits.push(`<b>${nLodgeAreas}</b> hotel${nLodgeAreas > 1 ? "s" : ""} (one per area)`);
+  if (ideas.length) bits.push(`<b>${ideas.length}</b> from your 💡 Ideas list`);
+  openModal(`
+    <h2>⚡ Auto-build schedule</h2>
+    <p style="font-size:13.5px;line-height:1.6;color:var(--ink-soft);margin:10px 0 6px">
+      This will slot ${bits.join(", ")} into your <b>${dayCount}-day</b> schedule —
+      grouped by area so you're not zig-zagging, meals spaced between sights, and each
+      area's hotel checked in on its first day, staying through until the next hotel —
+      the last one checks out on your final day.</p>
+    <p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 4px">
+      Stops already on the schedule stay exactly where they are, and you can drag anything
+      afterwards. Extra hotels stay in Suggestions.</p>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" id="m-apbuild">⚡ Build it</button>
+    </div>`);
+  $("m-apbuild").onclick = () => runAutoPlan(live, ideas, dayCount);
+}
+
+async function runAutoPlan(live, ideas, dayCount) {
+  closeModal();
+  toast("⚡ Building your schedule…");
+
+  // area centroids (to attach your loose Ideas to the nearest scouted area)
+  const areaOrder = [], centroids = {};
+  for (const g of live) {
+    const a = g.area || "Nearby";
+    if (!centroids[a]) { centroids[a] = { lat: 0, lng: 0, n: 0 }; areaOrder.push(a); }
+    if (g.lat != null) { centroids[a].lat += g.lat; centroids[a].lng += g.lng; centroids[a].n++; }
+  }
+  for (const a in centroids) if (centroids[a].n) { centroids[a].lat /= centroids[a].n; centroids[a].lng /= centroids[a].n; }
+
+  // collect items: suggestions (one hotel per area) + unscheduled idea stops
+  const items = [], lodgeSeen = new Set();
+  for (const g of live) {
+    const a = g.area || "Nearby";
+    if (g.kind === "lodging") { if (lodgeSeen.has(a)) continue; lodgeSeen.add(a); }
+    items.push({ kind: g.kind, area: a, sugg: g });
+  }
+  for (const s of ideas) {
+    let a = "Your ideas";
+    if (s.lat != null) {
+      let best = null, bestD = Infinity;
+      for (const ar of areaOrder) {
+        const c = centroids[ar];
+        if (!c || !c.n) continue;
+        const d = Math.hypot((s.lat - c.lat) * 111, (s.lng - c.lng) * 111 * Math.cos(s.lat * Math.PI / 180));
+        if (d < bestD) { bestD = d; best = ar; }
+      }
+      if (best && bestD < 60) a = best; // within ~60 km of a scouted area
+    }
+    items.push({ kind: s.category || "other", area: a, stop: s, priority: true });
+  }
+
+  // group by area (your own ideas schedule first), order within each:
+  // hotel check-in first, then sights with meals interleaved; hand-picked ideas lead
+  const groups = new Map(), order = [];
+  for (const it of items) {
+    if (!groups.has(it.area)) { groups.set(it.area, []); order.push(it.area); }
+    groups.get(it.area).push(it);
+  }
+  order.sort((x, y) => (x === "Your ideas" ? -1 : 0) - (y === "Your ideas" ? -1 : 0));
+  const ordered = [];
+  for (const a of order) {
+    const g = groups.get(a);
+    const lodge = g.filter(i => i.kind === "lodging");
+    const food = g.filter(i => i.kind === "food");
+    const rest = g.filter(i => i.kind !== "food" && i.kind !== "lodging")
+      .sort((x, y) => (y.priority ? 1 : 0) - (x.priority ? 1 : 0));
+    const seq = [...lodge];
+    let fi = 0;
+    for (let i = 0; i < rest.length; i++) {
+      seq.push(rest[i]);
+      if (i % 2 === 1 && fi < food.length) seq.push(food[fi++]);
+    }
+    while (fi < food.length) seq.push(food[fi++]);
+    ordered.push(...seq);
+  }
+
+  // deal into days on top of the existing load
+  const load = {};
+  for (let d = 1; d <= dayCount; d++) load[d] = state.stops.filter(s => s.day_index === d).length;
+  const totalAfter = ordered.length + Object.values(load).reduce((a, b) => a + b, 0);
+  const cap = Math.max(4, Math.ceil(totalAfter / dayCount));
+  let d = 1, lastDay = 1;
+  const newRows = [], moves = [], suggIds = [];
+  for (const it of ordered) {
+    while (d < dayCount && load[d] >= cap) d++;
+    lastDay = d;
+    const orderIndex = load[d]++;
+    if (it.stop) {
+      const mv = { id: it.stop.id, day_index: d, order_index: orderIndex };
+      if (it.kind === "lodging") mv.end_day = dayCount; // your own hotel idea: stay through the last day
+      moves.push(mv);
+    } else {
+      const g = it.sugg;
+      suggIds.push(g.id);
+      const noteBits = [];
+      if (it.kind === "lodging") noteBits.push("Check-in");
+      if (g.description) noteBits.push(g.description.replace(/ \(found nearby on the map\)/, ""));
+      newRows.push({
+        trip_id: state.trip.id, name: g.name,
+        category: CATEGORIES[g.kind] ? g.kind : "other",
+        day_index: d, order_index: orderIndex,
+        lat: g.lat, lng: g.lng,
+        address: g.address || g.area || null,
+        cost: g.est_cost,
+        notes: noteBits.join(" · ").slice(0, 140) || null,
+      });
+    }
+  }
+
+  // hotels are stays: each checks out when the next one checks in; the last checks out on the final day
+  const lodgeRows = newRows.filter(r => r.category === "lodging").sort((a, b) => a.day_index - b.day_index);
+  for (let i = 0; i < lodgeRows.length; i++) {
+    const next = lodgeRows[i + 1];
+    lodgeRows[i].end_day = next ? Math.max(next.day_index, lodgeRows[i].day_index + 1) : dayCount;
+    if (lodgeRows[i].end_day < lodgeRows[i].day_index) lodgeRows[i].end_day = lodgeRows[i].day_index;
+  }
+
+  const ops = [];
+  if (newRows.length) ops.push(sb.from("trip_stops").insert(newRows));
+  for (const m of moves) ops.push(sb.from("trip_stops").update({ day_index: m.day_index, order_index: m.order_index, ...(m.end_day ? { end_day: m.end_day } : {}) }).eq("id", m.id));
+  if (suggIds.length) ops.push(sb.from("trip_suggestions").update({ status: "added" }).in("id", suggIds));
+  const results = await Promise.all(ops);
+  const bad = results.find(r => r.error);
+  if (bad) { console.error(bad.error); toast("Couldn't build the schedule — try again"); return; }
+  await reloadTripData();
+  setTab("itin");
+  toast(`⚡ Scheduled ${ordered.length} ideas across ${lastDay} day${lastDay > 1 ? "s" : ""}`);
+}
+
+/* ---------- boot ---------- */
+window.__ta = state; // debugging/testing handle
+loadTrips();
+</script>
+</body>
+</html>

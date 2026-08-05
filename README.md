@@ -1,0 +1,34 @@
+# JollyJaunt 🧭
+
+A collaborative trip planner in a single HTML file. Map-first itineraries with
+live area scouting, auto-built schedules, multi-night hotel stays, voting,
+budgets, and real-time sync.
+
+## Features
+- **Map-first planning** — search places (scoped to the current map view), click the map, or scout an area; day routes draw on the map with numbered pins
+- **✨ Scouting** — finds sights, restaurants, and hotels around wherever the map is looking (OpenStreetMap/Overpass), streaming onto the map live; stoppable mid-search; works in dense cities
+- **⚡ Auto-build schedule** — slots every idea into your days, grouped by area, meals between sights, hotels as multi-night stays split across the trip
+- **🛏️ Hotel stays** — check-in/check-out days, "staying at" shown through the stay, nightly costs in each day's budget
+- **Collaboration** — shared trips, votes on stops, live sync (Supabase realtime)
+- **Budgets** — per-stop costs, per-day totals, trip total in the trip's currency
+
+## Structure
+- `app.template.html` — the app source (edit this)
+- `lib/` — vendored Leaflet + Supabase JS (inlined at build time)
+- `build.py` — assembles the shippable single file
+- `jollyjaunt.html` — the built app (open in any browser)
+- `docs/jollyjaunt-app-store-plan.md` — roadmap to the Apple App Store
+
+## Build
+```
+python3 build.py
+```
+
+## Backend
+Supabase (Postgres + realtime). Tables: `trip_trips`, `trip_stops`,
+`trip_suggestions`, `trip_votes`. The bundled key is a publishable key for a
+development database — see the App Store plan for the auth/RLS hardening
+required before public release.
+
+Map data © OpenStreetMap contributors (ODbL). Geocoding by Nominatim; POI
+scouting via Overpass API.
