@@ -1,9 +1,9 @@
 {
-  "appId": "com.wavey.jollyjaunt",
-  "appName": "JollyJaunt",
+  "appId": "com.wavey.jollyjaunter",
+  "appName": "JollyJaunter",
   "webDir": "www",
   "ios": {
-    "contentInset": "always"
+    "contentInset": "never"
   },
   "server": {
     "allowNavigation": []

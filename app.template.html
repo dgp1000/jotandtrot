@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
-<title>JollyJaunt</title>
+<title>JollyJaunter</title>
 <style id="leaflet-css">
 /*__LEAFLET_CSS__*/
 </style>
@@ -182,14 +182,19 @@ header {
   }
   .logo { font-size: 16px; white-space: nowrap; }
   body.in-trip .logo { display: none; } /* in a trip, the trip name is the identity */
-  #header-trip-info { flex: 1 1 auto; min-width: 0; overflow: hidden; }
-  #header-trip-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; font-weight: 700; }
+  /* trip name gets its own full-width top row, big; buttons drop to a second row */
+  body.in-trip header { flex-wrap: wrap; row-gap: 2px; padding-bottom: 7px; }
+  #header-trip-info { flex: 1 1 100%; order: -1; min-width: 0; overflow: hidden; }
+  #header-trip-name {
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;
+    font-weight: 800; font-size: 21px; letter-spacing: -0.2px; text-transform: capitalize;
+  }
   #header-trip-dates, #live-dot, #user-chip { display: none !important; }
   body.in-trip .header-spacer { display: none; } /* trip name takes the flex space instead */
   body.in-trip #signout-btn { display: none !important; } /* sign out lives on the home screen */
   header .btn { padding: 5px 9px; font-size: 12px; white-space: nowrap; flex: 0 0 auto; }
 
-  #trip-view { height: auto; position: fixed; inset: 0; top: calc(48px + env(safe-area-inset-top)); }
+  #trip-view { height: auto; position: fixed; inset: 0; top: var(--hdr, 86px); }
   #trip-view.active { display: block; }
   #sidebar, #map { position: absolute; inset: 0; width: 100%; min-width: 0; border-right: none; }
   #sidebar { padding-bottom: calc(58px + env(safe-area-inset-bottom)); }
@@ -474,7 +479,7 @@ header {
 <body>
 
 <header>
-  <div class="logo" id="logo-btn" style="cursor:pointer" title="All trips"><span class="compass">🧭</span> JollyJaunt</div>
+  <div class="logo" id="logo-btn" style="cursor:pointer" title="All trips"><span class="compass">🧭</span> JollyJaunter</div>
   <div id="header-trip-info" style="display:none">
     <span id="header-trip-name"></span>
     <span id="header-trip-dates"></span>
@@ -491,7 +496,7 @@ header {
 <div id="auth-view" style="display:none">
   <div class="auth-card">
     <div class="auth-logo">🧭</div>
-    <h1>JollyJaunt</h1>
+    <h1>JollyJaunter</h1>
     <p class="auth-sub">Plan trips on a live map, day by day, with your crew.</p>
     <div id="auth-step-email">
       <input id="auth-email" type="email" placeholder="you@example.com" autocomplete="email">
@@ -887,8 +892,15 @@ $("tab-sugg").onclick = () => setTab("sugg");
 $("scout-btn").onclick = () => state.scouting ? stopScout() : scoutHere();
 
 /* mobile: which pane is on screen (map or plan) */
+function syncHeaderHeight() {
+  const h = document.querySelector("header").offsetHeight;
+  document.documentElement.style.setProperty("--hdr", h + "px");
+}
+window.addEventListener("resize", syncHeaderHeight);
+
 function setPane(pane) {
   state.pane = pane;
+  syncHeaderHeight();
   const tv = $("trip-view");
   tv.classList.toggle("pane-map", pane === "map");
   tv.classList.toggle("pane-plan", pane === "plan");
@@ -940,7 +952,7 @@ $("share-btn").onclick = () => {
   openModal(`
     <h2>Share this trip</h2>
     <p style="font-size:13.5px;color:var(--ink-soft);margin-bottom:14px">
-      Send this code to your travel crew. They sign in to JollyJaunt with their email, paste the
+      Send this code to your travel crew. They sign in to JollyJaunter with their email, paste the
       code under "Have a share code?", and they're on the trip — adding stops, voting, the works.
     </p>
     <div class="field"><input value="${esc(code)}" readonly onclick="this.select()" style="font-size:18px;text-align:center;font-weight:700;letter-spacing:2px"></div>
