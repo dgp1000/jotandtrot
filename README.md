@@ -25,10 +25,15 @@ python3 build.py
 ```
 
 ## Backend
-Supabase (Postgres + realtime). Tables: `trip_trips`, `trip_stops`,
-`trip_suggestions`, `trip_votes`. The bundled key is a publishable key for a
-development database — see the App Store plan for the auth/RLS hardening
-required before public release.
+Supabase (Postgres + realtime + auth). Tables: `trip_trips`, `trip_stops`,
+`trip_suggestions`, `trip_votes`, `trip_members`.
+
+**Security (Phase 1 complete):** sign-in is required (email one-time codes via
+Supabase Auth). Row Level Security is enforced on every table: users see only
+trips they own or have joined; joining happens through a share code
+(`jj_join_trip` RPC); votes are tied to the voting account; only owners can
+delete a trip. The bundled publishable key grants nothing without a signed-in
+session.
 
 Map data © OpenStreetMap contributors (ODbL). Geocoding by Nominatim; POI
 scouting via Overpass API.
