@@ -9,6 +9,7 @@
     "allowNavigation": []
   },
   "packageClassList": [
-    "AppleSignInPlugin"
+    "AppleSignInPlugin",
+    "PushPlugin"
   ]
 }

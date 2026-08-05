@@ -190,6 +190,7 @@ header {
     font-weight: 800; font-size: 21px; letter-spacing: -0.2px; text-transform: capitalize;
   }
   #header-trip-dates, #live-dot, #user-chip { display: none !important; }
+  #offline-chip { font-size: 10.5px; padding: 2px 7px; }
   body.in-trip .header-spacer { display: none; } /* trip name takes the flex space instead */
   body.in-trip #signout-btn { display: none !important; } /* sign out lives on the home screen */
   header .btn { padding: 5px 9px; font-size: 12px; white-space: nowrap; flex: 0 0 auto; }
@@ -486,6 +487,7 @@ header {
   </div>
   <div class="header-spacer"></div>
   <span id="live-dot"><span class="dot"></span> Live</span>
+  <span id="offline-chip" style="display:none;font-size:11.5px;font-weight:700;color:#7a5312;background:#fdf3e3;border:1px solid #f0d9ad;border-radius:8px;padding:3px 9px;white-space:nowrap">📴 Offline — saved copy</span>
   <span id="user-chip" style="display:none;font-size:12.5px;color:var(--ink-soft)"></span>
   <button class="btn subtle" id="signout-btn" style="display:none">Sign out</button>
   <button class="btn subtle" id="share-btn" style="display:none">🔗 Share code</button>
@@ -663,11 +665,42 @@ function closeModal() { $("modal-backdrop").classList.remove("open"); }
 $("modal-backdrop").addEventListener("click", (e) => { if (e.target === $("modal-backdrop")) closeModal(); });
 
 /* ---------- data: trips ---------- */
+/* ---------- offline cache: the itinerary keeps working with no signal ---------- */
+function writeCache(k, v) { try { jjStore.setItem("jjc:" + k, JSON.stringify(v)); } catch (e) {} }
+function readCache(k) { try { const s = jjStore.getItem("jjc:" + k); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+function setOffline(off) {
+  if (state.offline === off) return;
+  state.offline = off;
+  $("offline-chip").style.display = off ? "" : "none";
+  if (!off) toast("Back online ✓");
+}
+function requireOnline(what) {
+  if (!state.offline) return true;
+  toast(`You're offline — ${what || "that"} needs a connection. Your saved itinerary is read-only.`);
+  return false;
+}
+window.addEventListener("online", () => {
+  if (!state.offline) return;
+  if (state.trip) { openTrip(state.trip.id); } else if (state.user) { loadTrips(); }
+});
+
 async function loadTrips() {
   const { data, error } = await sb.from("trip_trips").select("*").order("created_at", { ascending: false });
-  if (error) { $("offline-note").style.display = "block"; console.error(error); return; }
+  if (error) {
+    const cached = readCache("trips");
+    if (cached) {
+      setOffline(true);
+      $("offline-note").style.display = "none";
+      state.trips = cached;
+      renderTripGrid();
+      return;
+    }
+    $("offline-note").style.display = "block"; console.error(error); return;
+  }
+  setOffline(false);
   $("offline-note").style.display = "none";
   state.trips = data;
+  writeCache("trips", data);
   renderTripGrid();
 }
 
@@ -801,8 +834,24 @@ function showCreateTrip() {
 
 /* ---------- data: current trip ---------- */
 async function openTrip(id) {
-  const { data: trip, error } = await sb.from("trip_trips").select("*").eq("id", id).single();
-  if (error || !trip) { toast("Couldn't open trip"); return; }
+  let trip = null;
+  try {
+    const { data, error } = await sb.from("trip_trips").select("*").eq("id", id).single();
+    if (error) throw error;
+    trip = data;
+  } catch (e) {
+    const cached = readCache("trip:" + id);
+    if (!cached) { toast("Couldn't open trip"); return; }
+    setOffline(true);
+    state.trip = cached.trip;
+    state.stops = cached.stops || [];
+    state.votes = cached.votes || [];
+    state.suggestions = cached.suggestions || [];
+    state._fitted = false;
+    showTripView();
+    toast("📴 Offline — showing your saved copy of this trip");
+    return;
+  }
   state.trip = trip;
   state._fitted = false;
   await reloadTripData();
@@ -872,9 +921,21 @@ async function reloadTripData() {
     sb.from("trip_votes").select("*, trip_stops!inner(trip_id)").eq("trip_stops.trip_id", tripId),
     sb.from("trip_suggestions").select("*").eq("trip_id", tripId).order("created_at", { ascending: false }),
   ]);
+  if (stopsRes.error) {
+    // network trouble mid-trip: show the saved copy rather than a blank screen
+    const cached = readCache("trip:" + tripId);
+    if (cached) {
+      setOffline(true);
+      state.stops = cached.stops || []; state.votes = cached.votes || []; state.suggestions = cached.suggestions || [];
+      renderItinerary(); renderSuggestions(); renderMarkers();
+      return;
+    }
+  }
+  setOffline(false);
   state.stops = stopsRes.data || [];
   state.votes = votesRes.data || [];
   state.suggestions = suggRes.data || [];
+  writeCache("trip:" + tripId, { trip: state.trip, stops: state.stops, votes: state.votes, suggestions: state.suggestions, savedAt: Date.now() });
   renderItinerary();
   renderSuggestions();
   renderMarkers();
@@ -1170,6 +1231,7 @@ function stopScout() {
 /* manual scout of whatever area the map is showing — radius follows the current view */
 async function scoutHere() {
   if (!state.trip || !state.map) return;
+  if (!requireOnline("scouting")) return;
   const c = state.map.getCenter();
   // cover roughly what's on screen: distance from center to a corner, clamped 3–25 km
   const ne = state.map.getBounds().getNorthEast();
@@ -1591,6 +1653,7 @@ function openStopForm(pre, existing = null) {
   syncLodging();
 
   $("m-ssave").onclick = async () => {
+    if (!requireOnline("saving a stop")) return;
     const name = $("m-sname").value.trim();
     if (!name) { toast("Name the stop"); return; }
     const dayIndex = parseInt($("m-sday").value, 10);
@@ -1642,6 +1705,7 @@ function openStopForm(pre, existing = null) {
 }
 
 async function moveStop(stop, dir) {
+  if (!requireOnline("reordering")) return;
   const siblings = state.stops.filter(s => s.day_index === stop.day_index).sort((a, b) => a.order_index - b.order_index);
   const idx = siblings.findIndex(s => s.id === stop.id);
   const swapWith = siblings[idx + dir];
@@ -1654,6 +1718,7 @@ async function moveStop(stop, dir) {
 }
 
 async function setStopDay(stop, dayIndex) {
+  if (!requireOnline("moving a stop")) return;
   const orderIndex = state.stops.filter(s => s.day_index === dayIndex).length;
   await sb.from("trip_stops").update({ day_index: dayIndex, order_index: orderIndex }).eq("id", stop.id);
   await reloadTripData();
@@ -1670,6 +1735,7 @@ function voteSummary(stopId) {
 }
 
 async function castVote(stopId, value) {
+  if (!requireOnline("voting")) return;
   const name = ensureVoter();
   if (!name) return;
   const existing = state.votes.find(v => v.stop_id === stopId && v.voter_name === name);
@@ -1726,6 +1792,7 @@ function cleanupDrag() {
 }
 
 async function persistMove(stop, newDay, newIndex) {
+  if (!requireOnline("moving a stop")) return;
   // reorder locally first (optimistic)
   const target = state.stops
     .filter(s => s.day_index === newDay && s.id !== stop.id)
@@ -1886,6 +1953,7 @@ function plannableCount() {
 
 function autoPlan() {
   if (!state.trip) return;
+  if (!requireOnline("auto-building the schedule")) return;
   const live = (state.suggestions || []).filter(g => g.status === "suggested");
   const ideas = state.stops.filter(s => s.day_index === 0);
   if (!live.length && !ideas.length) { toast("Nothing to schedule — scout an area or add ideas first"); return; }
@@ -2047,6 +2115,42 @@ function showAuth() {
   $("auth-or").style.display = native ? "" : "none";
 }
 
+/* call a native plugin through whichever bridge surface this Capacitor exposes */
+async function nativeCall(plugin, method, options) {
+  const C = window.Capacitor;
+  if (C.Plugins && C.Plugins[plugin] && C.Plugins[plugin][method]) return C.Plugins[plugin][method](options);
+  if (typeof C.registerPlugin === "function") return C.registerPlugin(plugin)[method](options);
+  if (typeof C.nativePromise === "function") return C.nativePromise(plugin, method, options);
+  throw new Error("Capacitor bridge has no plugin call surface");
+}
+
+/* on the iPhone: ask for notification permission and file this device's token */
+async function registerPushIfNative() {
+  try {
+    const C = window.Capacitor;
+    if (!(C && C.isNativePlatform && C.isNativePlatform())) return;
+    toast("Setting up notifications…");
+    const perm = await nativeCall("Push", "register", {});
+    if (!perm || !perm.granted) { toast("Notifications are off — enable them in Settings → JollyJaunter"); return; }
+    for (let i = 0; i < 10; i++) {
+      await new Promise(r => setTimeout(r, 800));
+      const res = await nativeCall("Push", "getToken", {});
+      if (res && res.token) {
+        await sb.from("trip_device_tokens").upsert({
+          token: res.token, user_id: state.user.id, platform: "ios",
+          updated_at: new Date().toISOString(),
+        });
+        toast("🔔 Notifications ready");
+        return;
+      }
+    }
+    toast("Notifications on, but no device token arrived — try relaunching");
+  } catch (e) {
+    toast("Notification setup failed: " + ((e && (e.message || e.code)) || "unknown"));
+    console.warn("push registration:", e);
+  }
+}
+
 async function appleSignIn() {
   try {
     $("auth-note").textContent = "";
@@ -2054,18 +2158,7 @@ async function appleSignIn() {
     const rawNonce = crypto.randomUUID() + crypto.randomUUID();
     const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(rawNonce));
     const hashedNonce = [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
-    // call the native plugin through whichever bridge surface this Capacitor exposes
-    const C = window.Capacitor;
-    let res;
-    if (C.Plugins && C.Plugins.AppleSignIn && C.Plugins.AppleSignIn.authorize) {
-      res = await C.Plugins.AppleSignIn.authorize({ nonce: hashedNonce });
-    } else if (typeof C.registerPlugin === "function") {
-      res = await C.registerPlugin("AppleSignIn").authorize({ nonce: hashedNonce });
-    } else if (typeof C.nativePromise === "function") {
-      res = await C.nativePromise("AppleSignIn", "authorize", { nonce: hashedNonce });
-    } else {
-      throw new Error("Capacitor bridge has no plugin call surface");
-    }
+    const res = await nativeCall("AppleSignIn", "authorize", { nonce: hashedNonce });
     if (!res || !res.identityToken) throw new Error("no identity token");
     const { data, error } = await sb.auth.signInWithIdToken({ provider: "apple", token: res.identityToken, nonce: rawNonce });
     if (error) throw error;
@@ -2097,6 +2190,7 @@ async function onSignedIn(user) {
     const { data } = await sb.rpc("jj_claim_legacy_trips");
     if (data > 0) toast(`Welcome back — your ${data} existing trips are now tied to your account`);
   } catch (e) { /* bootstrap only ever fires once */ }
+  registerPushIfNative(); // fire-and-forget; prompts once on iPhone
   showHome();
 }
 

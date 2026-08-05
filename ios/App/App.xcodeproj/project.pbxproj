@@ -18,6 +18,7 @@
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 		AA00000000000000000001B1 /* AppleSignInPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000000000000000001F1 /* AppleSignInPlugin.swift */; };
 		AA00000000000000000002B1 /* MyViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000000000000000002F1 /* MyViewController.swift */; };
+		AA00000000000000000004B1 /* PushPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00000000000000000004F1 /* PushPlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -35,6 +36,7 @@
 		AA00000000000000000001F1 /* AppleSignInPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSignInPlugin.swift; sourceTree = "<group>"; };
 		AA00000000000000000002F1 /* MyViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyViewController.swift; sourceTree = "<group>"; };
 		AA00000000000000000003F1 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
+		AA00000000000000000004F1 /* PushPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushPlugin.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -71,6 +73,7 @@
 			children = (
 				9582B6822FE993A50072D4E8 /* SceneDelegate.swift */,
 				AA00000000000000000001F1 /* AppleSignInPlugin.swift */,
+				AA00000000000000000004F1 /* PushPlugin.swift */,
 				AA00000000000000000002F1 /* MyViewController.swift */,
 				AA00000000000000000003F1 /* App.entitlements */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
@@ -169,6 +172,7 @@
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 				AA00000000000000000001B1 /* AppleSignInPlugin.swift in Sources */,
+				AA00000000000000000004B1 /* PushPlugin.swift in Sources */,
 				AA00000000000000000002B1 /* MyViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
