@@ -37,3 +37,18 @@ session.
 
 Map data © OpenStreetMap contributors (ODbL). Geocoding by Nominatim; POI
 scouting via Overpass API.
+
+## iOS app (Phase 2)
+
+The `ios/` folder is a Capacitor project (Swift Package Manager — no CocoaPods
+needed). To run JollyJaunt on an iPhone:
+
+1. On a Mac with Xcode: `open ios/App/App.xcodeproj`
+2. Select the `App` scheme and your iPhone (or a simulator), set your Apple
+   Developer team under Signing & Capabilities, and hit Run.
+3. After changing the web app: `npm run ios` (rebuilds `jollyjaunt.html`,
+   copies it into `www/`, and syncs it into the iOS project), then run again
+   from Xcode.
+
+Bundle ID: `com.wavey.jollyjaunt`. Icon/splash sources live in `assets/` —
+regenerate the full iOS set with `npx @capacitor/assets generate --ios`.
