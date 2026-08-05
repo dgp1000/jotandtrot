@@ -499,6 +499,8 @@ header {
     <h1>JollyJaunter</h1>
     <p class="auth-sub">Plan trips on a live map, day by day, with your crew.</p>
     <div id="auth-step-email">
+      <button id="auth-apple" style="display:none;width:100%;margin-bottom:14px;background:#000;color:#fff;border:none;border-radius:10px;padding:12px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer"> Continue with Apple</button>
+      <div id="auth-or" style="display:none;font-size:11.5px;color:var(--ink-soft);margin-bottom:12px">— or use your email —</div>
       <input id="auth-email" type="email" placeholder="you@example.com" autocomplete="email">
       <button class="btn primary" id="auth-send" style="width:100%">Email me a sign-in code</button>
       <button class="btn subtle" id="auth-have" style="width:100%;margin-top:8px">I already have a code</button>
@@ -2055,7 +2057,50 @@ function showAuth() {
   $("auth-step-email").style.display = "";
   $("auth-step-code").style.display = "none";
   $("auth-note").textContent = "";
+  // Apple sign-in only exists inside the native iOS app
+  const native = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  $("auth-apple").style.display = native ? "" : "none";
+  $("auth-or").style.display = native ? "" : "none";
 }
+
+async function appleSignIn() {
+  try {
+    $("auth-note").textContent = "";
+    // Apple wants the SHA-256 of a nonce in the request; Supabase wants the raw nonce back
+    const rawNonce = crypto.randomUUID() + crypto.randomUUID();
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(rawNonce));
+    const hashedNonce = [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+    // call the native plugin through whichever bridge surface this Capacitor exposes
+    const C = window.Capacitor;
+    let res;
+    if (C.Plugins && C.Plugins.AppleSignIn && C.Plugins.AppleSignIn.authorize) {
+      res = await C.Plugins.AppleSignIn.authorize({ nonce: hashedNonce });
+    } else if (typeof C.registerPlugin === "function") {
+      res = await C.registerPlugin("AppleSignIn").authorize({ nonce: hashedNonce });
+    } else if (typeof C.nativePromise === "function") {
+      res = await C.nativePromise("AppleSignIn", "authorize", { nonce: hashedNonce });
+    } else {
+      throw new Error("Capacitor bridge has no plugin call surface");
+    }
+    if (!res || !res.identityToken) throw new Error("no identity token");
+    const { data, error } = await sb.auth.signInWithIdToken({ provider: "apple", token: res.identityToken, nonce: rawNonce });
+    if (error) throw error;
+    // Apple only shares the name on the very first authorization — keep it
+    if (res.givenName && !(data.user.user_metadata && data.user.user_metadata.name)) {
+      try {
+        await sb.auth.updateUser({ data: { name: res.givenName } });
+        data.user.user_metadata = { ...(data.user.user_metadata || {}), name: res.givenName };
+      } catch (e) {}
+    }
+    onSignedIn(data.user);
+  } catch (e) {
+    const msg = (e && (e.message || e.error_description || e.code || "")) + "";
+    if (/cancel|1001/i.test(msg)) return; // user closed the Apple sheet — not an error
+    console.error("apple sign-in failed: " + msg + " | " + JSON.stringify(e && Object.getOwnPropertyNames(e).reduce((o, k) => (o[k] = e[k], o), {})));
+    $("auth-note").textContent = "Apple sign-in failed: " + (msg || "unknown error") + " — you can use the email code instead.";
+  }
+}
+$("auth-apple").onclick = appleSignIn;
 
 async function onSignedIn(user) {
   state.user = user;
