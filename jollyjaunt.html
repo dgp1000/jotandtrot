@@ -657,7 +657,7 @@ function showCreateTrip() {
     if (q.length < 2) { destBox.classList.remove("open"); return; }
     destTimer = setTimeout(async () => {
       try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=${encodeURIComponent(q)}`);
+        const res = await fetchT(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=${encodeURIComponent(q)}`, {}, 12000);
         const data = await res.json();
         destBox.innerHTML = "";
         if (!data.length) { destBox.classList.remove("open"); return; }
@@ -687,7 +687,7 @@ function showCreateTrip() {
     // if they typed a destination but didn't pick from the list, geocode it best-effort
     if (!chosenDest && destText) {
       try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(destText)}`);
+        const res = await fetchT(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(destText)}`, {}, 12000);
         const data = await res.json();
         if (data.length) chosenDest = { lat: +data[0].lat, lng: +data[0].lon, bbox: data[0].boundingbox || null, label: destText };
       } catch (e) {}
@@ -743,7 +743,7 @@ async function backfillDestCoords() {
   const t = state.trip;
   if (!t || !t.destination || t.dest_lat != null) return;
   try {
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(t.destination)}`);
+    const res = await fetchT(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(t.destination)}`, {}, 12000);
     const data = await res.json();
     if (!data.length) return;
     const patch = { dest_lat: +data[0].lat, dest_lng: +data[0].lon, dest_bbox: data[0].boundingbox || null };
@@ -1067,12 +1067,24 @@ async function scoutHere() {
   finally { setScoutStatus(false); }
 }
 
+/* fetch with a hard client-side timeout — a rate-limited server that silently hangs
+   the connection must never stall the app (browsers otherwise wait minutes) */
+async function fetchT(url, opts = {}, ms = 20000) {
+  const outer = opts.signal;
+  const ctl = new AbortController();
+  const onAbort = () => ctl.abort();
+  if (outer) { if (outer.aborted) ctl.abort(); else outer.addEventListener("abort", onAbort, { once: true }); }
+  const timer = setTimeout(() => ctl.abort(), ms);
+  try { return await fetch(url, { ...opts, signal: ctl.signal }); }
+  finally { clearTimeout(timer); if (outer) outer.removeEventListener("abort", onAbort); }
+}
+
 async function autoSuggest(tripId, lat, lng, radius = 6000, signal = null) {
   const aborted = () => { const e = new Error("scout aborted"); e.name = "AbortError"; return e; };
-  // area name via reverse geocode (best effort)
+  // area name via reverse geocode (best effort, 8s cap)
   let area = "Nearby";
   try {
-    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=10`, { signal });
+    const r = await fetchT(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=10`, { signal }, 8000);
     const j = await r.json();
     const a = j.address || {};
     area = a.city || a.town || a.village || a.county || j.name || "Nearby";
@@ -1148,10 +1160,10 @@ async function fetchOverpass(query, signal, rotate = 0, deadline = 0) {
       if (deadline && Date.now() > deadline) return null;
       if (signal && signal.aborted) { const err = new Error("scout aborted"); err.name = "AbortError"; throw err; }
       try {
-        const res = await fetch(`${ep}?data=${encodeURIComponent(query)}`, {
+        const res = await fetchT(`${ep}?data=${encodeURIComponent(query)}`, {
           headers: { "Accept": "application/json" },
           signal,
-        });
+        }, 20000);
         if (!res.ok) continue;
         const data = await res.json();
         if (data.remark && !(data.elements || []).length) continue; // timed-out empty result
@@ -1334,7 +1346,7 @@ async function doSearch() {
     if (state.map) {
       const b = state.map.getBounds();
       const viewbox = `${b.getWest()},${b.getNorth()},${b.getEast()},${b.getSouth()}`;
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=8&bounded=1&viewbox=${viewbox}&q=${encodeURIComponent(q)}`, { headers: { "Accept": "application/json" } });
+      const res = await fetchT(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=8&bounded=1&viewbox=${viewbox}&q=${encodeURIComponent(q)}`, { headers: { "Accept": "application/json" } }, 12000);
       data = await res.json();
       scoped = true;
     }
@@ -1348,7 +1360,7 @@ async function doSearch() {
       if (dest && destCity && !q.toLowerCase().includes(destCity)) candidates.push(`${q}, ${dest}`);
       candidates.push(q);
       for (const cq of candidates) {
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&q=${encodeURIComponent(cq)}`, { headers: { "Accept": "application/json" } });
+        const res = await fetchT(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&q=${encodeURIComponent(cq)}`, { headers: { "Accept": "application/json" } }, 12000);
         data = await res.json();
         if (data.length) break;
       }
