@@ -451,6 +451,7 @@ header {
     <div id="auth-step-email">
       <input id="auth-email" type="email" placeholder="you@example.com" autocomplete="email">
       <button class="btn primary" id="auth-send" style="width:100%">Email me a sign-in code</button>
+      <button class="btn subtle" id="auth-have" style="width:100%;margin-top:8px">I already have a code</button>
     </div>
     <div id="auth-step-code" style="display:none">
       <p class="auth-sub">Enter the sign-in code we emailed to <b id="auth-email-echo"></b></p>
@@ -2001,6 +2002,16 @@ $("auth-verify").onclick = async () => {
   $("auth-verify").disabled = false;
   if (error || !data.user) { $("auth-note").textContent = "That code didn't work — check it or request a new one."; return; }
   onSignedIn(data.user);
+};
+
+$("auth-have").onclick = () => {
+  const email = $("auth-email").value.trim().toLowerCase();
+  if (!email || !email.includes("@")) { $("auth-note").textContent = "Enter your email first, then click this."; return; }
+  $("auth-email-echo").textContent = email;
+  $("auth-step-email").style.display = "none";
+  $("auth-step-code").style.display = "";
+  $("auth-note").textContent = "Enter the code from the most recent email we sent you.";
+  $("auth-code").focus();
 };
 
 $("auth-back").onclick = () => { $("auth-step-email").style.display = ""; $("auth-step-code").style.display = "none"; $("auth-note").textContent = ""; };
