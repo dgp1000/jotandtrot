@@ -421,6 +421,10 @@ header {
 .staying-chip:hover { background: #efeade; }
 .staying-chip b { color: var(--ink); font-weight: 600; }
 .staying-night { margin-left: auto; font-size: 11.5px; opacity: .8; }
+.new-chip {
+  display: inline-block; background: var(--amber); color: #fff; font-size: 9.5px; font-weight: 800;
+  letter-spacing: 0.5px; border-radius: 5px; padding: 1px 5px; margin-left: 6px; vertical-align: 2px;
+}
 .pin-pop { animation: pinpop .45s cubic-bezier(.2,1.6,.4,1); }
 @keyframes pinpop {
   0% { transform: translateY(-18px) scale(.3); opacity: 0; }
@@ -907,7 +911,22 @@ async function openTrip(id) {
   }
   state.trip = trip;
   state._fitted = false;
+  const lastSeen = parseInt(jjStore.getItem("jj-seen:" + id) || "0", 10);
   await reloadTripData();
+  // activity: flag stops your companions added since you last opened this trip
+  state.freshStopIds = new Set();
+  if (lastSeen && state.user) {
+    for (const s of state.stops) {
+      if (s.created_at && new Date(s.created_at).getTime() > lastSeen && s.created_by && s.created_by !== state.user.id) {
+        state.freshStopIds.add(s.id);
+      }
+    }
+    if (state.freshStopIds.size) {
+      toast(`✨ ${state.freshStopIds.size} new stop${state.freshStopIds.size > 1 ? "s" : ""} since your last visit`);
+      renderItinerary();
+    }
+  }
+  jjStore.setItem("jj-seen:" + id, String(Date.now()));
   showTripView();
   subscribeRealtime(id);
   await backfillDestCoords();
@@ -1063,20 +1082,74 @@ function showHome() {
 $("back-btn").onclick = showHome;
 $("logo-btn").onclick = showHome;
 $("refresh-btn").onclick = async () => { await reloadTripData(); toast("Synced"); };
-$("share-btn").onclick = () => {
+$("share-btn").onclick = async () => {
   const code = state.trip.share_slug;
   openModal(`
-    <h2>Share this trip</h2>
-    <p style="font-size:13.5px;color:var(--ink-soft);margin-bottom:14px">
-      Send this code to your travel crew. They sign in to JollyJaunter with their email, paste the
-      code under "Have a share code?", and they're on the trip — adding stops, voting, the works.
+    <h2>Share & members</h2>
+    <p style="font-size:13.5px;color:var(--ink-soft);margin-bottom:12px">
+      Send this code to your travel crew. They sign in to JollyJaunter, paste it under
+      "Have a share code?", and they're on the trip — adding stops, voting, the works.
     </p>
     <div class="field"><input value="${esc(code)}" readonly onclick="this.select()" style="font-size:18px;text-align:center;font-weight:700;letter-spacing:2px"></div>
-    <div class="modal-actions">
+    <div class="modal-actions" style="margin-bottom:16px">
       <button class="btn" onclick="closeModal()">Close</button>
-      <button class="btn primary" onclick="navigator.clipboard && navigator.clipboard.writeText('${esc(code)}').then(()=>{closeModal();toast('Code copied')})">Copy code</button>
-    </div>`);
+      <button class="btn" id="m-copycode">Copy code</button>
+      <button class="btn primary" id="m-sharecode">📤 Share invite</button>
+    </div>
+    <div style="font-weight:700;font-size:14px;margin-bottom:8px">👥 On this trip</div>
+    <div id="m-members" style="font-size:13.5px;color:var(--ink-soft)">Loading…</div>`);
+
+  $("m-copycode").onclick = () => {
+    if (navigator.clipboard) navigator.clipboard.writeText(code).then(() => toast("Code copied"));
+  };
+  $("m-sharecode").onclick = async () => {
+    const msg = `Join my trip "${state.trip.name}" on JollyJaunter! 🧭\nOpen the app, sign in, and enter share code: ${code}`;
+    try {
+      const C = window.Capacitor;
+      if (C && C.isNativePlatform && C.isNativePlatform()) {
+        await nativeCall("Share", "share", { text: msg });
+      } else if (navigator.share) {
+        await navigator.share({ text: msg });
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(msg);
+        toast("Invite copied — paste it anywhere");
+      }
+    } catch (e) { /* user closed the sheet */ }
+  };
+
+  renderMembers();
 };
+
+async function renderMembers() {
+  const box = $("m-members");
+  if (!box) return;
+  const { data, error } = await sb.rpc("jj_trip_members", { t: state.trip.id });
+  if (error || !Array.isArray(data)) { box.textContent = "Couldn't load members."; return; }
+  const meId = state.user && state.user.id;
+  const iOwn = state.trip.owner_id === meId;
+  box.innerHTML = "";
+  for (const m of data) {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;align-items:center;gap:8px;padding:7px 2px;border-bottom:1px solid var(--line)";
+    const isMe = m.user_id === meId;
+    let action = "";
+    if (m.is_owner) action = "";
+    else if (iOwn) action = `<button class="btn subtle" data-uid="${esc(m.user_id)}" style="margin-left:auto;color:#c0392b">✕ Remove</button>`;
+    else if (isMe) action = `<button class="btn subtle" data-uid="${esc(m.user_id)}" style="margin-left:auto;color:#c0392b">Leave trip</button>`;
+    row.innerHTML = `<span>${m.is_owner ? "👑" : "👤"}</span>
+      <span style="color:var(--ink);font-weight:${isMe ? 700 : 400}">${esc(m.name)}${isMe ? " (you)" : ""}</span>${action}`;
+    const btn = row.querySelector("button");
+    if (btn) btn.onclick = async () => {
+      if (!requireOnline("changing members")) return;
+      const uid = btn.dataset.uid;
+      await sb.from("trip_members").delete().eq("trip_id", state.trip.id).eq("user_id", uid);
+      if (uid === meId) { closeModal(); toast("You left the trip"); showHome(); return; }
+      toast("Member removed");
+      renderMembers();
+    };
+    box.appendChild(row);
+  }
+}
 
 $("join-btn").onclick = async () => {
   const code = $("join-code").value.trim().toLowerCase();
@@ -1964,10 +2037,11 @@ function renderItinerary() {
       const costChip = s.cost != null
         ? `<span class="cost-chip">${nights ? `${money(s.cost)}/night · ${nights} night${nights > 1 ? "s" : ""}` : money(s.cost)}</span>` : "";
       const stayChip = nights ? `<span class="cost-chip stay-thru-chip" style="background:#eef4f4">🛏️ thru Day ${Math.max(s.end_day || s.day_index + 1, s.day_index + 1)}</span>` : "";
+      const newChip = state.freshStopIds && state.freshStopIds.has(s.id) ? `<span class="new-chip">NEW</span>` : "";
       card.innerHTML = `
         <div class="stop-num" style="background:${cat.color}">${d === 0 ? "★" : num}</div>
         <div class="stop-body">
-          <div class="stop-name">${cat.emoji} ${esc(s.name)}${costChip}${stayChip}</div>
+          <div class="stop-name">${cat.emoji} ${esc(s.name)}${newChip}${costChip}${stayChip}</div>
           ${s.address ? `<div class="stop-addr">${esc(s.address)}</div>` : ""}
           ${s.notes ? `<div class="stop-notes">${esc(s.notes)}</div>` : ""}
           <div class="stop-actions">

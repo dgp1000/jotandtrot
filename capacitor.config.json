@@ -10,6 +10,7 @@
   },
   "packageClassList": [
     "AppleSignInPlugin",
-    "PushPlugin"
+    "PushPlugin",
+    "SharePlugin"
   ]
 }
