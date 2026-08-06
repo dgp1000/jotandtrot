@@ -611,8 +611,8 @@ header {
 <script id="supabase-js">/*__SUPABASE_JS__*/</script>
 <script>
 /* ================= Trip Architect v1 ================= */
-const SUPABASE_URL = "https://hdsnwuhbmbvrkjctrsbm.supabase.co";
-const SUPABASE_KEY = "sb_publishable_8yxzekSbGKHy9SK-HRJWYw_fH7-2KaQ";
+const SUPABASE_URL = "https://vlmqbskqyvutbrmhfvuv.supabase.co";
+const SUPABASE_KEY = "sb_publishable_XB2XYyFuhc08zjGgOvuKig_3zBw6Fp0";
 // session storage that survives reloads where allowed (browser / Capacitor) and
 // degrades to in-memory where blocked (sandboxed artifact views)
 const jjStore = (() => {
@@ -1904,7 +1904,7 @@ function openStopForm(pre, existing = null) {
       <button class="btn" onclick="closeModal()">Cancel</button>
       <button class="btn primary" id="m-ssave">${existing ? "Save" : "Add stop"}</button>
     </div>`);
-  $("m-sname").focus();
+  if (window.innerWidth > 820) $("m-sname").focus();
 
   // lodging = a stay: pick the check-out day; cost is per night
   const syncLodging = () => {
@@ -2470,8 +2470,41 @@ async function onSignedIn(user) {
     const { data } = await sb.rpc("jj_claim_legacy_trips");
     if (data > 0) toast(`Welcome back — your ${data} existing trips are now tied to your account`);
   } catch (e) { /* bootstrap only ever fires once */ }
+  // brand-new account? give them the Lisbon example trip and a quick tour
+  try {
+    const { data: sampleId } = await sb.rpc("jj_create_sample_trip");
+    if (sampleId) {
+      registerPushIfNative();
+      showHome();
+      showWelcome(sampleId);
+      return;
+    }
+  } catch (e) {}
   registerPushIfNative(); // fire-and-forget; prompts once on iPhone
   showHome();
+}
+
+function showWelcome(sampleId) {
+  openModal(`
+    <h2>Welcome to JollyJaunter 🧭</h2>
+    <p style="font-size:13.5px;line-height:1.65;color:var(--ink-soft);margin:10px 0 14px">
+      Plan trips on a live map, together with your crew. The quick version:
+    </p>
+    <div style="font-size:13.5px;line-height:1.9;color:var(--ink)">
+      🗺️ <b>Create a trip</b> — the map flies to your destination and scouts ideas nearby<br>
+      ✨ <b>Scout anywhere</b> — pan the map, tap "Scout this area" for sights, food & hotels<br>
+      ⚡ <b>Auto-build</b> — one tap slots every idea into a day-by-day schedule<br>
+      🔗 <b>Share the code</b> — friends join in, add stops, and vote 👍👎<br>
+      📴 <b>Works offline</b> — your itinerary is saved for when you're travelling
+    </div>
+    <p style="font-size:13.5px;color:var(--ink-soft);margin:14px 0 6px">
+      We've added an <b>example trip to Lisbon</b> so you can poke around — it's yours to edit or delete.
+    </p>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">I'll explore myself</button>
+      <button class="btn primary" id="m-welcome-open">🇵🇹 Open the Lisbon example</button>
+    </div>`);
+  $("m-welcome-open").onclick = () => { closeModal(); openTrip(sampleId); };
 }
 
 $("auth-send").onclick = async () => {
@@ -2486,7 +2519,7 @@ $("auth-send").onclick = async () => {
   $("auth-step-email").style.display = "none";
   $("auth-step-code").style.display = "";
   $("auth-note").textContent = "Codes can take a minute to arrive. Check spam too.";
-  $("auth-code").focus();
+  if (window.innerWidth > 820) $("auth-code").focus();
 };
 
 $("auth-verify").onclick = async () => {
@@ -2507,7 +2540,7 @@ $("auth-have").onclick = () => {
   $("auth-step-email").style.display = "none";
   $("auth-step-code").style.display = "";
   $("auth-note").textContent = "Enter the code from the most recent email we sent you.";
-  $("auth-code").focus();
+  if (window.innerWidth > 820) $("auth-code").focus();
 };
 
 $("auth-back").onclick = () => { $("auth-step-email").style.display = ""; $("auth-step-code").style.display = "none"; $("auth-note").textContent = ""; };
