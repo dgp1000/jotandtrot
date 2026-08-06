@@ -835,8 +835,7 @@ function showCreateTrip() {
     if (q.length < 2) { destBox.classList.remove("open"); return; }
     destTimer = setTimeout(async () => {
       try {
-        const res = await fetchT(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=${encodeURIComponent(q)}`, {}, 12000);
-        const data = await res.json();
+        const data = await geoSearch(q, { limit: 5 });
         destBox.innerHTML = "";
         if (!data.length) { destBox.classList.remove("open"); return; }
         for (const r of data) {
@@ -865,8 +864,7 @@ function showCreateTrip() {
     // if they typed a destination but didn't pick from the list, geocode it best-effort
     if (!chosenDest && destText) {
       try {
-        const res = await fetchT(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(destText)}`, {}, 12000);
-        const data = await res.json();
+        const data = await geoSearch(destText, { limit: 1 });
         if (data.length) chosenDest = { lat: +data[0].lat, lng: +data[0].lon, bbox: data[0].boundingbox || null, label: destText };
       } catch (e) {}
     }
@@ -953,8 +951,7 @@ async function backfillDestCoords() {
   const t = state.trip;
   if (!t || !t.destination || t.dest_lat != null) return;
   try {
-    const res = await fetchT(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(t.destination)}`, {}, 12000);
-    const data = await res.json();
+    const data = await geoSearch(t.destination, { limit: 1 });
     if (!data.length) return;
     const patch = { dest_lat: +data[0].lat, dest_lng: +data[0].lon, dest_bbox: data[0].boundingbox || null };
     Object.assign(t, patch);
@@ -1165,15 +1162,23 @@ $("join-btn").onclick = async () => {
 function setMapTiles(dark) {
   if (!state.map) return;
   if (state.tileLayer) state.map.removeLayer(state.tileLayer);
-  state.tileLayer = dark
-    ? L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-        maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-      })
-    : L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      });
+  if (geoOn()) {
+    const style = dark ? "dark-matter-brown" : "osm-bright-smooth";
+    state.tileLayer = L.tileLayer(`https://maps.geoapify.com/v1/tile/${style}/{z}/{x}/{y}.png?apiKey=${GEO_KEY}`, {
+      maxZoom: 19,
+      attribution: 'Powered by <a href="https://www.geoapify.com/">Geoapify</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    });
+  } else {
+    state.tileLayer = dark
+      ? L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+          maxZoom: 19,
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        })
+      : L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        });
+  }
   state.tileLayer.addTo(state.map);
 }
 
@@ -1425,16 +1430,119 @@ async function fetchT(url, opts = {}, ms = 20000) {
   finally { clearTimeout(timer); if (outer) outer.removeEventListener("abort", onAbort); }
 }
 
-async function autoSuggest(tripId, lat, lng, radius = 6000, signal = null) {
-  const aborted = () => { const e = new Error("scout aborted"); e.name = "AbortError"; return e; };
-  // area name via reverse geocode (best effort, 8s cap)
-  let area = "Nearby";
+/* ===== production map services (Geoapify) with community-server fallback ===== */
+const GEO_KEY = "f8517829865240d293e43b8caa453e9d"; // set to a Geoapify API key to enable production services
+function geoOn() { return !!GEO_KEY && !GEO_KEY.startsWith("__"); }
+
+/* forward geocode — nominatim-shaped results either way */
+async function geoSearch(q, opts = {}) {
+  const limit = opts.limit || 5;
+  if (geoOn()) {
+    try {
+      let url = `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(q)}&limit=${limit}&format=json&apiKey=${GEO_KEY}`;
+      if (opts.rect) url += `&filter=rect:${opts.rect}`;
+      if (opts.bias) url += `&bias=proximity:${opts.bias}`;
+      const res = await fetchT(url, {}, 12000);
+      if (res.ok) {
+        const j = await res.json();
+        const rs = (j.results || []).map(r => ({
+          lat: r.lat, lon: r.lon,
+          display_name: r.formatted || r.name || "",
+          boundingbox: r.bbox ? [r.bbox.lat1, r.bbox.lat2, r.bbox.lon1, r.bbox.lon2] : null,
+        }));
+        if (rs.length || opts.rect) return rs; // an empty scoped search is a real answer
+      }
+    } catch (e) {}
+    if (opts.rect) return [];
+  }
+  try {
+    let url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=${limit}&q=${encodeURIComponent(q)}`;
+    if (opts.rect) { const [w, s2, e2, n] = opts.rect.split(","); url += `&bounded=1&viewbox=${w},${n},${e2},${s2}`; }
+    const res = await fetchT(url, { headers: { "Accept": "application/json" } }, 12000);
+    return await res.json();
+  } catch (e) { return []; }
+}
+
+/* reverse geocode to an area name */
+async function geoAreaName(lat, lng, signal) {
+  if (geoOn()) {
+    try {
+      const res = await fetchT(`https://api.geoapify.com/v1/geocode/reverse?lat=${lat}&lon=${lng}&format=json&apiKey=${GEO_KEY}`, { signal }, 8000);
+      if (res.ok) {
+        const j = await res.json();
+        const r = (j.results || [])[0];
+        if (r) return r.city || r.town || r.village || r.county || r.state || "Nearby";
+      }
+    } catch (e) {}
+  }
   try {
     const r = await fetchT(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=10`, { signal }, 8000);
     const j = await r.json();
-    const a = j.address || {};
-    area = a.city || a.town || a.village || a.county || j.name || "Nearby";
-  } catch (e) {}
+    const a2 = j.address || {};
+    return a2.city || a2.town || a2.village || a2.county || j.name || "Nearby";
+  } catch (e) { return "Nearby"; }
+}
+
+/* category detection for map-view keyword searches */
+function detectPlaceCategory(q) {
+  const t = q.toLowerCase();
+  if (/restaurant|dinner|lunch|food|eat/.test(t)) return "catering.restaurant";
+  if (/cafe|café|coffee|brunch|breakfast|bakery/.test(t)) return "catering.cafe";
+  if (/bar\b|pub\b|drink|beer|wine/.test(t)) return "catering.bar,catering.pub";
+  if (/hotel|hostel|stay|lodging|guest ?house|accommodation/.test(t)) return "accommodation";
+  if (/museum|gallery/.test(t)) return "entertainment.museum";
+  if (/sight|attraction|landmark|monument/.test(t)) return "tourism.sights";
+  if (/park\b|garden/.test(t)) return "leisure.park,tourism.sights";
+  if (/supermarket|grocery|market/.test(t)) return "commercial.supermarket,commercial.marketplace";
+  return null;
+}
+
+/* Geoapify Places for the scout — returns rows shaped like classifyElements picks */
+async function geoapifyScout(grp, lat, lng, radius, seen, area, tripId, signal) {
+  const url = `https://api.geoapify.com/v2/places?categories=${grp.geoCats}&filter=circle:${lng},${lat},${radius}&limit=40&apiKey=${GEO_KEY}`;
+  const res = await fetchT(url, { signal }, 15000);
+  if (!res.ok) throw new Error("places " + res.status);
+  const j = await res.json();
+  const buckets = {};
+  for (const k in grp.kinds) buckets[k] = [];
+  for (const f of (j.features || [])) {
+    const p = f.properties || {};
+    const name = p.name;
+    if (!name || p.lat == null || seen.has(name.toLowerCase())) continue;
+    const cats = (p.categories || []).join(" ");
+    let kind, desc;
+    if (/entertainment\.zoo|entertainment\.aquarium|entertainment\.theme_park|entertainment\.activity_park/.test(cats)) { kind = "activity"; desc = "Things to do"; }
+    else if (/entertainment\.museum/.test(cats)) { kind = "sight"; desc = "Museum"; }
+    else if (/tourism\.sights/.test(cats)) { kind = "sight"; desc = "Local sight"; }
+    else if (/catering\.cafe/.test(cats)) { kind = "food"; desc = "Café"; }
+    else if (/catering/.test(cats)) { kind = "food"; desc = "Restaurant"; }
+    else if (/accommodation\.guest_house/.test(cats)) { kind = "lodging"; desc = "Guest house"; }
+    else if (/accommodation/.test(cats)) { kind = "lodging"; desc = "Hotel"; }
+    else continue;
+    if (!(kind in buckets)) continue;
+    seen.add(name.toLowerCase());
+    const raw = (p.datasource && p.datasource.raw) || {};
+    const score = ((raw.wikidata || raw.wikipedia) ? 3 : 0) + (p.website || raw.website ? 1 : 0) + (raw.stars ? 1 : 0);
+    buckets[kind].push({
+      trip_id: tripId, kind, name: String(name).slice(0, 120),
+      description: desc + " (found nearby on the map)",
+      area, est_cost: null, cost_note: null,
+      lat: p.lat, lng: p.lon,
+      address: p.address_line2 || p.formatted || null,
+      _score: score,
+    });
+  }
+  const picks = [];
+  for (const k in grp.kinds) {
+    buckets[k].sort((x, y) => y._score - x._score);
+    picks.push(...buckets[k].slice(0, grp.kinds[k]));
+  }
+  return picks;
+}
+
+async function autoSuggest(tripId, lat, lng, radius = 6000, signal = null) {
+  const aborted = () => { const e = new Error("scout aborted"); e.name = "AbortError"; return e; };
+  const area = await geoAreaName(lat, lng, signal);
   if (signal && signal.aborted) throw aborted();
 
   // three category searches, results streaming onto the map as each lands.
@@ -1447,9 +1555,12 @@ async function autoSuggest(tripId, lat, lng, radius = 6000, signal = null) {
   const mkFood = (r) => `node(around:${r},${lat},${lng})[amenity=restaurant][name];node(around:${r},${lat},${lng})[amenity=cafe][name];`;
   const mkLodge = (r) => `nwr(around:${r},${lat},${lng})[tourism=hotel][name];nwr(around:${r},${lat},${lng})[tourism=guest_house][name];`;
   const searches = [
-    { kinds: { sight: 5, activity: 3 }, make: mkSights, r: radius, cap: 150, label: "sights & activities" },
-    { kinds: { food: 4 },               make: mkFood,   r: Math.min(radius, 2500), cap: 60, label: "places to eat" },
-    { kinds: { lodging: 3 },            make: mkLodge,  r: Math.min(radius, 4000), cap: 60, label: "places to stay" },
+    { kinds: { sight: 5, activity: 3 }, make: mkSights, r: radius, cap: 150, label: "sights & activities",
+      geoCats: "tourism.sights,entertainment.museum,entertainment.zoo,entertainment.aquarium,entertainment.theme_park" },
+    { kinds: { food: 4 },               make: mkFood,   r: Math.min(radius, 2500), cap: 60, label: "places to eat",
+      geoCats: "catering.restaurant,catering.cafe" },
+    { kinds: { lodging: 3 },            make: mkLodge,  r: Math.min(radius, 4000), cap: 60, label: "places to stay",
+      geoCats: "accommodation.hotel,accommodation.guest_house" },
   ];
   const deadline = Date.now() + 40000; // whole scout wraps up inside ~40s, keeping whatever it found
 
@@ -1467,19 +1578,26 @@ async function autoSuggest(tripId, lat, lng, radius = 6000, signal = null) {
     if (i > 0) await new Promise(r => setTimeout(r, 700)); // pace requests — public servers rate-limit bursts
     if (signal && signal.aborted) break;
     setScoutStage(`Looking for ${grp.label}…`);
-    let els = null;
-    try { els = await fetchOverpass(Q(grp.make(grp.r), grp.cap), signal, i, deadline); }
-    catch (e) { if (signal && signal.aborted) break; }
-    if (els === null && !(signal && signal.aborted) && Date.now() < deadline) {
-      // dense area or busy server — try once more with half the radius
-      const r2 = Math.max(1200, Math.round(grp.r / 2));
-      try { els = await fetchOverpass(Q(grp.make(r2), grp.cap), signal, i + 1, deadline); }
-      catch (e) { if (signal && signal.aborted) break; }
+    let picks = null;
+    if (geoOn()) {
+      try { picks = await geoapifyScout(grp, lat, lng, grp.r, seen, area, tripId, signal); }
+      catch (e) { if (signal && signal.aborted) break; picks = null; /* fall back to community servers */ }
     }
-    if (els === null) { failed++; continue; }
+    if (picks === null) {
+      let els = null;
+      try { els = await fetchOverpass(Q(grp.make(grp.r), grp.cap), signal, i, deadline); }
+      catch (e) { if (signal && signal.aborted) break; }
+      if (els === null && !(signal && signal.aborted) && Date.now() < deadline) {
+        // dense area or busy server — try once more with half the radius
+        const r2 = Math.max(1200, Math.round(grp.r / 2));
+        try { els = await fetchOverpass(Q(grp.make(r2), grp.cap), signal, i + 1, deadline); }
+        catch (e) { if (signal && signal.aborted) break; }
+      }
+      if (els === null) { failed++; continue; }
+      if (signal && signal.aborted) break;
+      picks = classifyElements(els, grp.kinds, seen, area, tripId);
+    }
     if (signal && signal.aborted) break;
-
-    const picks = classifyElements(els, grp.kinds, seen, area, tripId);
     if (!picks.length) continue;
     const rows = picks.map(({ _score, ...row }) => row);
     // never let a hung database call freeze the scout: 10s or we move on
@@ -1699,10 +1817,26 @@ async function doSearch() {
     let data = [], scoped = false;
     if (state.map) {
       const b = state.map.getBounds();
-      const viewbox = `${b.getWest()},${b.getNorth()},${b.getEast()},${b.getSouth()}`;
-      const res = await fetchT(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=8&bounded=1&viewbox=${viewbox}&q=${encodeURIComponent(q)}`, { headers: { "Accept": "application/json" } }, 12000);
-      data = await res.json();
+      const rect = `${b.getWest()},${b.getSouth()},${b.getEast()},${b.getNorth()}`;
       scoped = true;
+      const cat = geoOn() ? detectPlaceCategory(q) : null;
+      if (cat) {
+        try {
+          // honor the specific words too: "ramen restaurant" → restaurants named like "ramen"
+          const leftover = q.replace(/restaurant|dinner|lunch|food|eat|cafe|café|coffee|brunch|breakfast|bakery|bars?|pubs?|drink|beer|wine|hotels?|hostels?|stay|lodging|guest ?house|accommodation|museums?|galler(?:y|ies)|sights?|attractions?|landmarks?|monuments?|parks?|gardens?|supermarkets?|grocery|market|near me|nearby|\bin\b|\bthe\b/gi, "").replace(/[^\p{L}\p{N} ]/gu, "").trim();
+          let url = `https://api.geoapify.com/v2/places?categories=${cat}&filter=rect:${rect}&limit=8&apiKey=${GEO_KEY}`;
+          if (leftover.length >= 3) url += `&name=${encodeURIComponent(leftover)}`;
+          const res = await fetchT(url, {}, 12000);
+          if (res.ok) {
+            const j = await res.json();
+            data = (j.features || []).filter(f => f.properties && f.properties.name).map(f => ({
+              lat: f.properties.lat, lon: f.properties.lon,
+              display_name: f.properties.name + (f.properties.address_line2 ? ", " + f.properties.address_line2 : ""),
+            }));
+          }
+        } catch (e) {}
+      }
+      if (!data.length) data = await geoSearch(q, { limit: 8, rect });
     }
     // 2) nothing in view → fall back to destination-biased, then global search
     let fallback = false;
@@ -1714,8 +1848,7 @@ async function doSearch() {
       if (dest && destCity && !q.toLowerCase().includes(destCity)) candidates.push(`${q}, ${dest}`);
       candidates.push(q);
       for (const cq of candidates) {
-        const res = await fetchT(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&q=${encodeURIComponent(cq)}`, { headers: { "Accept": "application/json" } }, 12000);
-        data = await res.json();
+        data = await geoSearch(cq, { limit: 6 });
         if (data.length) break;
       }
     }
