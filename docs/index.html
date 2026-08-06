@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jolly Jaunter — Plan trips together</title>
+<meta name="description" content="Jolly Jaunter is a collaborative trip planner for iPhone. Scout an area for ideas, vote with your crew, auto-build a day-by-day schedule, and take it offline.">
+<meta property="og:title" content="Jolly Jaunter — Plan trips together">
+<meta property="og:description" content="Scout ideas on a map, vote with your crew, and auto-build your itinerary.">
+<meta property="og:image" content="img/icon-512.png">
+<link rel="icon" href="img/favicon.png">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cream: #f6f4ef;
+    --teal: #0f6b6b;
+    --teal-dark: #0a4f4f;
+    --amber: #d98324;
+    --ink: #23302f;
+    --muted: #5d6b6a;
+    --card: #ffffff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Nunito', system-ui, sans-serif; background: var(--cream); color: var(--ink); line-height: 1.6; }
+  h1, h2, h3 { font-family: 'Poppins', system-ui, sans-serif; line-height: 1.2; }
+  a { color: var(--teal); }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 0 24px; }
+
+  /* Hero */
+  header.hero { background: linear-gradient(160deg, var(--teal) 0%, var(--teal-dark) 100%); color: #fff; overflow: hidden; }
+  .hero-inner { display: flex; align-items: center; gap: 48px; padding: 72px 24px 84px; max-width: 1060px; margin: 0 auto; flex-wrap: wrap; }
+  .hero-copy { flex: 1 1 380px; min-width: 300px; }
+  .hero-logo { width: 92px; height: 92px; border-radius: 22px; box-shadow: 0 10px 30px rgba(0,0,0,.35); margin-bottom: 24px; }
+  .hero h1 { font-size: clamp(2.2rem, 5vw, 3.4rem); font-weight: 800; letter-spacing: -.5px; }
+  .hero h1 .amber { color: #ffb85c; }
+  .hero p.tag { font-size: 1.25rem; margin: 16px 0 30px; color: #d7e7e6; max-width: 30em; }
+  .btn { display: inline-block; font-family: 'Poppins', sans-serif; font-weight: 600; text-decoration: none; border-radius: 14px; padding: 14px 26px; font-size: 1.05rem; }
+  .btn-amber { background: var(--amber); color: #fff; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
+  .btn-amber:hover { background: #c37318; }
+  .btn-ghost { border: 2px solid rgba(255,255,255,.5); color: #fff; margin-left: 12px; }
+  .btn-ghost:hover { border-color: #fff; }
+  .hero-note { margin-top: 14px; font-size: .9rem; color: #b9d2d1; }
+
+  /* Phone frames */
+  .phones { flex: 1 1 320px; display: flex; justify-content: center; gap: 22px; }
+  .phone { border-radius: 34px; border: 7px solid #12302f; background: #12302f; box-shadow: 0 24px 50px rgba(0,0,0,.4); overflow: hidden; width: 220px; flex-shrink: 0; }
+  .phone img { display: block; width: 100%; height: auto; }
+  .phone.back { transform: translateY(34px) rotate(3deg); }
+  .phone.front { transform: translateY(-6px) rotate(-2deg); }
+  @media (max-width: 560px) { .phone.back { display: none; } }
+
+  /* Features */
+  section { padding: 72px 0; }
+  section h2 { font-size: 2rem; font-weight: 700; text-align: center; margin-bottom: 10px; }
+  .sub { text-align: center; color: var(--muted); max-width: 40em; margin: 0 auto 44px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 22px; }
+  .card { background: var(--card); border-radius: 18px; padding: 26px; box-shadow: 0 4px 16px rgba(35,48,47,.07); }
+  .card .emoji { font-size: 1.9rem; }
+  .card h3 { font-size: 1.15rem; margin: 10px 0 6px; color: var(--teal-dark); }
+  .card p { color: var(--muted); font-size: .98rem; }
+
+  /* How it works */
+  .how { background: #fff; }
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 28px; counter-reset: step; }
+  .step { text-align: center; padding: 0 8px; }
+  .step .n { font-family: 'Poppins', sans-serif; font-weight: 700; width: 44px; height: 44px; line-height: 44px; border-radius: 50%; background: var(--teal); color: #fff; display: inline-block; font-size: 1.2rem; margin-bottom: 14px; }
+  .step h3 { font-size: 1.1rem; margin-bottom: 6px; }
+  .step p { color: var(--muted); font-size: .95rem; }
+
+  /* Night mode strip */
+  .night { background: #1c2524; color: #e8ecec; }
+  .night-inner { display: flex; align-items: center; gap: 48px; flex-wrap: wrap; }
+  .night-copy { flex: 1 1 300px; }
+  .night h2 { text-align: left; color: #fff; }
+  .night p { color: #a9b8b7; margin-top: 12px; max-width: 32em; }
+  .night .phone { margin: 0 auto; }
+
+  /* CTA + footer */
+  .cta { text-align: center; }
+  .cta .btn-amber { margin-top: 8px; }
+  footer { background: var(--teal-dark); color: #cfe2e1; padding: 36px 24px; font-size: .9rem; }
+  .foot-inner { max-width: 1060px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 18px; justify-content: space-between; align-items: center; }
+  footer a { color: #fff; text-decoration: none; margin-right: 18px; }
+  footer a:hover { text-decoration: underline; }
+  .attr { font-size: .8rem; color: #9dbdbc; max-width: 34em; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="hero-copy">
+      <img class="hero-logo" src="img/icon-512.png" alt="Jolly Jaunter logo — a compass rose">
+      <h1>Jolly <span class="amber">Jaunter</span></h1>
+      <p class="tag">Plan trips together. Scout ideas on a live map, vote with your crew, and let the app build your day-by-day schedule.</p>
+      <a class="btn btn-amber" href="mailto:dgperkins@gmail.com?subject=Jolly%20Jaunter%20beta">Join the beta</a>
+      <a class="btn btn-ghost" href="#features">See features</a>
+      <p class="hero-note">Currently in beta on TestFlight for iPhone. App Store launch coming soon.</p>
+    </div>
+    <div class="phones">
+      <div class="phone back"><img src="img/docs_plan_light.png" alt="Itinerary screen showing a day-by-day Lisbon schedule with prices and votes"></div>
+      <div class="phone front"><img src="img/docs_map_light.png" alt="Map screen showing numbered trip stops around Lisbon"></div>
+    </div>
+  </div>
+</header>
+
+<section id="features">
+  <div class="wrap">
+    <h2>Everything a trip needs, in one place</h2>
+    <p class="sub">Made for planning with friends and family — everyone sees the same trip, live.</p>
+    <div class="grid">
+      <div class="card"><div class="emoji">✨</div><h3>Scout any area</h3><p>Point the map anywhere and hit “Scout this area.” Ideas stream onto the map one by one — sights, food, viewpoints — ready to add to your trip.</p></div>
+      <div class="card"><div class="emoji">⚡</div><h3>Auto-build your schedule</h3><p>Collected a pile of ideas? One tap slots them into your days into a sensible schedule you can rearrange freely.</p></div>
+      <div class="card"><div class="emoji">🗳️</div><h3>Vote as a crew</h3><p>Share a trip with a code or the share sheet. Everyone suggests, votes with a thumbs up or down, and sees what’s new since they last looked.</p></div>
+      <div class="card"><div class="emoji">🏨</div><h3>Hotels that span nights</h3><p>Pick a hotel and it flows across your stay, check-in to check-out — with per-night prices in your budget. Splitting the stay across two hotels? Handled.</p></div>
+      <div class="card"><div class="emoji">💶</div><h3>Budgets per day</h3><p>Every stop can carry a price, and each day totals itself up, so nobody is surprised at the end.</p></div>
+      <div class="card"><div class="emoji">✈️</div><h3>Works offline</h3><p>Your itinerary is cached on your phone, so it's there in airplane mode or on a metro with no signal. Push notifications tell you when someone adds stops.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="how">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <p class="sub">From blank map to shared itinerary in minutes.</p>
+    <div class="steps">
+      <div class="step"><span class="n">1</span><h3>Start a trip</h3><p>Name it, set your dates and destination.</p></div>
+      <div class="step"><span class="n">2</span><h3>Scout &amp; search</h3><p>Scout areas for ideas or search for specific places, scoped to the map you're looking at.</p></div>
+      <div class="step"><span class="n">3</span><h3>Invite your crew</h3><p>Share a code. Everyone adds ideas and votes on what makes the cut.</p></div>
+      <div class="step"><span class="n">4</span><h3>Build the plan</h3><p>Auto-build the schedule, tweak it together, and take it with you — even offline.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="night">
+  <div class="night-inner wrap">
+    <div class="night-copy">
+      <h2>Easy on the eyes</h2>
+      <p>A full night mode — dark map tiles included — for planning tomorrow from tonight's hotel bed.</p>
+    </div>
+    <div class="phone"><img src="img/docs_map_dark.png" alt="Night mode map of Lisbon with dark tiles and trip markers"></div>
+  </div>
+</section>
+
+<section class="cta">
+  <div class="wrap">
+    <h2>Jaunt jollier</h2>
+    <p class="sub">Jolly Jaunter is in beta on TestFlight now, with an App Store launch on the way.</p>
+    <a class="btn btn-amber" href="mailto:dgperkins@gmail.com?subject=Jolly%20Jaunter%20beta">Request an invite</a>
+  </div>
+</section>
+
+<footer>
+  <div class="foot-inner">
+    <div>
+      <a href="privacy.html">Privacy</a>
+      <a href="support.html">Support</a>
+    </div>
+    <p class="attr">© 2026 Jolly Jaunter · Map data © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors · Maps &amp; places by <a href="https://www.geoapify.com/">Geoapify</a></p>
+  </div>
+</footer>
+
+</body>
+</html>
