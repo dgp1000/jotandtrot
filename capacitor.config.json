@@ -1,9 +1,10 @@
 {
-  "appId": "com.wavey.jollyjaunter",
-  "appName": "JollyJaunter",
+  "appId": "com.wavey.jotandtrot",
+  "appName": "Jot & Trot",
   "webDir": "www",
   "ios": {
-    "contentInset": "never"
+    "contentInset": "never",
+    "scheme": "JotAndTrot"
   },
   "server": {
     "allowNavigation": []

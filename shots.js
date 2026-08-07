@@ -26,7 +26,7 @@ async function phonePage(browser, dark) {
   const handler = async route => { try { await route.fulfill(curlFetch(route.request())); } catch (e) { try { await route.abort(); } catch (e2) {} } };
   for (const pat of ['**://vlmqbskqyvutbrmhfvuv.supabase.co/**','**://api.geoapify.com/**','**://maps.geoapify.com/**']) await context.route(pat, handler);
   const page = await context.newPage();
-  await page.goto('file:///home/claude/trip-architect/jollyjaunter.html');
+  await page.goto('file:///home/claude/trip-architect/jotandtrot.html');
   await page.waitForFunction(() => typeof sb !== 'undefined', null, { timeout: 15000, polling: 300 });
   await page.evaluate(async () => {
     const { data } = await sb.auth.signInWithPassword({ email: 'jj-shot@example.com', password: 'JJtest!2026pass' });

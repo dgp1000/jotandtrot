@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
-<title>JollyJaunter</title>
+<title>Jot & Trot</title>
 <style id="leaflet-css">
 /*__LEAFLET_CSS__*/
 </style>
@@ -520,7 +520,7 @@ header {
 <body>
 
 <header>
-  <div class="logo" id="logo-btn" style="cursor:pointer" title="All trips"><span class="compass">🧭</span> JollyJaunter</div>
+  <div class="logo" id="logo-btn" style="cursor:pointer" title="All trips"><span class="compass">🧭</span> Jot & Trot</div>
   <div id="header-trip-info" style="display:none">
     <span id="header-trip-name"></span>
     <span id="header-trip-dates"></span>
@@ -539,7 +539,7 @@ header {
 <div id="auth-view" style="display:none">
   <div class="auth-card">
     <div class="auth-logo">🧭</div>
-    <h1>JollyJaunter</h1>
+    <h1>Jot & Trot</h1>
     <p class="auth-sub">Plan trips on a live map, day by day, with your crew.</p>
     <div id="auth-step-email">
       <button id="auth-apple" style="display:none;width:100%;margin-bottom:14px;background:#000;color:#fff;border:none;border-radius:10px;padding:12px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer"> Continue with Apple</button>
@@ -1068,7 +1068,7 @@ $("share-btn").onclick = async () => {
   openModal(`
     <h2>Share & members</h2>
     <p style="font-size:13.5px;color:var(--ink-soft);margin-bottom:12px">
-      Send this code to your travel crew. They sign in to JollyJaunter, paste it under
+      Send this code to your travel crew. They sign in to Jot & Trot, paste it under
       "Have a share code?", and they're on the trip — adding stops, voting, the works.
     </p>
     <div class="field"><input value="${esc(code)}" readonly onclick="this.select()" style="font-size:18px;text-align:center;font-weight:700;letter-spacing:2px"></div>
@@ -1084,7 +1084,7 @@ $("share-btn").onclick = async () => {
     if (navigator.clipboard) navigator.clipboard.writeText(code).then(() => toast("Code copied"));
   };
   $("m-sharecode").onclick = async () => {
-    const msg = `Join my trip "${state.trip.name}" on JollyJaunter! 🧭\nOpen the app, sign in, and enter share code: ${code}`;
+    const msg = `Join my trip "${state.trip.name}" on Jot & Trot! 🧭\nOpen the app, sign in, and enter share code: ${code}`;
     try {
       const C = window.Capacitor;
       if (C && C.isNativePlatform && C.isNativePlatform()) {
@@ -2411,7 +2411,7 @@ async function registerPushIfNative() {
     if (!(C && C.isNativePlatform && C.isNativePlatform())) return;
     toast("Setting up notifications…");
     const perm = await nativeCall("Push", "register", {});
-    if (!perm || !perm.granted) { toast("Notifications are off — enable them in Settings → JollyJaunter"); return; }
+    if (!perm || !perm.granted) { toast("Notifications are off — enable them in Settings → Jot & Trot"); return; }
     for (let i = 0; i < 10; i++) {
       await new Promise(r => setTimeout(r, 800));
       const res = await nativeCall("Push", "getToken", {});
@@ -2486,7 +2486,7 @@ async function onSignedIn(user) {
 
 function showWelcome(sampleId) {
   openModal(`
-    <h2>Welcome to JollyJaunter 🧭</h2>
+    <h2>Welcome to Jot & Trot 🧭</h2>
     <p style="font-size:13.5px;line-height:1.65;color:var(--ink-soft);margin:10px 0 14px">
       Plan trips on a live map, together with your crew. The quick version:
     </p>

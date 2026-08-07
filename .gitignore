@@ -8,3 +8,4 @@ verify*.js
 package.json
 package-lock.json
 docs_*.png
+ios/App/App.xcodeproj

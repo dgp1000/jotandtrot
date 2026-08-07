@@ -1,4 +1,4 @@
-# JollyJaunter 🧭
+# Jot & Trot 🧭
 
 A collaborative trip planner in a single HTML file. Map-first itineraries with
 live area scouting, auto-built schedules, multi-night hotel stays, voting,
@@ -16,8 +16,8 @@ budgets, and real-time sync.
 - `app.template.html` — the app source (edit this)
 - `lib/` — vendored Leaflet + Supabase JS (inlined at build time)
 - `build.py` — assembles the shippable single file
-- `jollyjaunter.html` — the built app (open in any browser)
-- `docs/jollyjaunter-app-store-plan.md` — roadmap to the Apple App Store
+- `jotandtrot.html` — the built app (open in any browser)
+- `docs/jotandtrot-app-store-plan.md` — roadmap to the Apple App Store
 
 ## Build
 ```
@@ -41,14 +41,14 @@ scouting via Overpass API.
 ## iOS app (Phase 2)
 
 The `ios/` folder is a Capacitor project (Swift Package Manager — no CocoaPods
-needed). To run JollyJaunter on an iPhone:
+needed). To run Jot & Trot on an iPhone:
 
-1. On a Mac with Xcode: `open ios/App/App.xcodeproj`
-2. Select the `App` scheme and your iPhone (or a simulator), set your Apple
+1. On a Mac with Xcode: `open ios/App/JotAndTrot.xcodeproj`
+2. Select the `JotAndTrot` scheme and your iPhone (or a simulator), set your Apple
    Developer team under Signing & Capabilities, and hit Run.
-3. After changing the web app: `npm run ios` (rebuilds `jollyjaunter.html`,
+3. After changing the web app: `npm run ios` (rebuilds `jotandtrot.html`,
    copies it into `www/`, and syncs it into the iOS project), then run again
    from Xcode.
 
-Bundle ID: `com.wavey.jollyjaunter`. Icon/splash sources live in `assets/` —
+Bundle ID: `com.wavey.jotandtrot`. Icon/splash sources live in `assets/` —
 regenerate the full iOS set with `npx @capacitor/assets generate --ios`.
