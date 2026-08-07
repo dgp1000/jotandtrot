@@ -50,7 +50,7 @@ Scouting and search still depend on free volunteer OpenStreetMap servers, which 
 
 Prioritized after talking through where the app goes next (August 2026):
 
-1. **Universal invite links** — jauntmates.com/join/CODE style links that open the app if installed, or a web page if not. Turns every share into a growth loop; pairs with the native share sheet and the website.
+1. **Universal invite links** — ✅ built 7 Aug 2026. jotandtrot.com/join/CODE opens the app if installed (universal links via AASA + LinkPlugin), or an invite web page if not; the native share sheet now sends the link. Remaining: build once in Xcode so the new Associated Domains entitlement registers, then test a link end-to-end on the phone.
 2. **Web app** at app.(domain).com — the app is already a web app at heart; hosting it against the same backend means an invite link works for people without an iPhone. Together with #1 these are the growth pair.
 3. **Today view (during-trip mode)** — when today is inside the trip dates, open to today's plan: what's next, tap to hand off to Apple Maps, check off visited stops. Add a per-day weather icon (free forecast API).
 4. **Planning quality** — travel times between consecutive stops (Geoapify routing) with overpacked-day warnings; opening hours on suggestions and in the auto-scheduler; morning/afternoon/evening slots within days.

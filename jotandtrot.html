@@ -1100,7 +1100,7 @@ $("share-btn").onclick = async () => {
     if (navigator.clipboard) navigator.clipboard.writeText(code).then(() => toast("Code copied"));
   };
   $("m-sharecode").onclick = async () => {
-    const msg = `Join my trip "${state.trip.name}" on Jot & Trot! 🧭\nOpen the app, sign in, and enter share code: ${code}`;
+    const msg = `Join my trip "${state.trip.name}" on Jot & Trot! 🧭\nhttps://jotandtrot.com/join/${code}\n(or open the app, sign in, and enter share code: ${code})`;
     try {
       const C = window.Capacitor;
       if (C && C.isNativePlatform && C.isNativePlatform()) {
@@ -1157,6 +1157,36 @@ $("join-btn").onclick = async () => {
   await loadTrips();
   openTrip(data);
 };
+
+/* ---------- invite links (https://jotandtrot.com/join/CODE) ---------- */
+let pendingJoinCode = null;
+function captureJoinUrl(url) {
+  try {
+    const m = new URL(url).pathname.match(/^\/join\/([a-z0-9-]+)\/?$/i);
+    if (m) pendingJoinCode = m[1].toLowerCase();
+    return !!m;
+  } catch (e) { return false; }
+}
+async function flushPendingJoin() {
+  if (!pendingJoinCode || !state.user) return;
+  const code = pendingJoinCode; pendingJoinCode = null;
+  const { data, error } = await sb.rpc("jj_join_trip", { code });
+  if (error || !data) { toast("That invite link didn't match a trip"); return; }
+  toast("You're in! 🎉");
+  await loadTrips();
+  openTrip(data);
+}
+(async () => {
+  const C = window.Capacitor;
+  if (!C || !C.isNativePlatform || !C.isNativePlatform()) return;
+  try {
+    const Link = (C.Plugins && C.Plugins.Link) || (typeof C.registerPlugin === "function" && C.registerPlugin("Link"));
+    if (!Link) return;
+    Link.addListener("appUrlOpen", (ev) => { if (ev && ev.url && captureJoinUrl(ev.url)) flushPendingJoin(); });
+    const r = await Link.getLaunchUrl();
+    if (r && r.url && captureJoinUrl(r.url)) flushPendingJoin();
+  } catch (e) { /* older shell without LinkPlugin */ }
+})();
 
 /* ---------- map ---------- */
 function setMapTiles(dark) {
@@ -2492,12 +2522,14 @@ async function onSignedIn(user) {
     if (sampleId) {
       registerPushIfNative();
       showHome();
-      showWelcome(sampleId);
+      // arrived via an invite link? take them straight to the shared trip instead of the tour
+      if (pendingJoinCode) { flushPendingJoin(); } else { showWelcome(sampleId); }
       return;
     }
   } catch (e) {}
   registerPushIfNative(); // fire-and-forget; prompts once on iPhone
   showHome();
+  flushPendingJoin();
 }
 
 function showWelcome(sampleId) {

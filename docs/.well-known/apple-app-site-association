@@ -1,0 +1,12 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["48MUH57DEC.com.wavey.jotandtrot"],
+        "components": [
+          { "/": "/join/*", "comment": "trip invite links" }
+        ]
+      }
+    ]
+  }
+}
