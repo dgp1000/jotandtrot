@@ -552,6 +552,7 @@ body.dark .day-warn { background: #3a2c18; color: #f0c896; border-color: #6b4e1f
   <button class="btn subtle" id="signout-btn" style="display:none">Sign out</button>
   <button class="btn subtle" id="edit-trip-btn" style="display:none" title="Edit name, destination, or dates">✏️ Edit</button>
   <button class="btn subtle" id="expenses-btn" style="display:none" title="Log who paid and settle up">💸 Split</button>
+  <button class="btn subtle" id="tasks-btn" style="display:none" title="Who's booking what?">📋 Tasks</button>
   <button class="btn subtle" id="share-btn" style="display:none">🔗 Share code</button>
   <button class="btn subtle" id="refresh-btn" style="display:none" title="Refresh from server">↻ Sync</button>
   <button class="btn subtle" id="back-btn" style="display:none">← All trips</button>
@@ -669,6 +670,11 @@ let state = {
 
 /* ---------- utilities ---------- */
 const $ = (id) => document.getElementById(id);
+function linkify(escapedText) {
+  // escapedText has already been through esc(); URLs contain no chars that esc() rewrites
+  return escapedText.replace(/https?:\/\/[^\s<]+/g, (u) =>
+    `<a href="${u}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${u.replace(/^https?:\/\//, "").slice(0, 40)}${u.replace(/^https?:\/\//, "").length > 40 ? "…" : ""}</a>`);
+}
 function toast(msg) {
   const t = $("toast");
   t.textContent = msg;
@@ -1039,6 +1045,7 @@ function subscribeRealtime(tripId) {
       .on("postgres_changes", { event: "*", schema: "public", table: "trip_votes", filter: `trip_id=eq.${tripId}` }, onChange)
       .on("postgres_changes", { event: "*", schema: "public", table: "trip_suggestions", filter: `trip_id=eq.${tripId}` }, onChange)
       .on("postgres_changes", { event: "*", schema: "public", table: "trip_expenses", filter: `trip_id=eq.${tripId}` }, () => { if ($("x-body")) refreshExpenses(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_tasks", filter: `trip_id=eq.${tripId}` }, () => { if ($("t-body")) refreshTasks(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "trip_date_options", filter: `trip_id=eq.${tripId}` }, onChange)
       .on("postgres_changes", { event: "*", schema: "public", table: "trip_date_votes", filter: `trip_id=eq.${tripId}` }, onChange)
       .on("postgres_changes", { event: "*", schema: "public", table: "trip_comments", filter: `trip_id=eq.${tripId}` }, async () => {
@@ -1135,6 +1142,7 @@ function showTripView() {
   $("share-btn").style.display = "";
   $("edit-trip-btn").style.display = "";
   $("expenses-btn").style.display = "";
+  $("tasks-btn").style.display = "";
   $("refresh-btn").style.display = "";
   initMap();
   setTab("itin");
@@ -1155,6 +1163,7 @@ function showHome() {
   $("share-btn").style.display = "none";
   $("edit-trip-btn").style.display = "none";
   $("expenses-btn").style.display = "none";
+  $("tasks-btn").style.display = "none";
   $("refresh-btn").style.display = "none";
   loadTrips();
 }
@@ -1162,6 +1171,7 @@ function showHome() {
 $("back-btn").onclick = showHome;
 $("edit-trip-btn").onclick = () => showCreateTrip(state.trip);
 $("expenses-btn").onclick = showExpensesModal;
+$("tasks-btn").onclick = showTasksModal;
 $("logo-btn").onclick = showHome;
 $("refresh-btn").onclick = async () => { await reloadTripData(); toast("Synced"); };
 $("share-btn").onclick = async () => {
@@ -2352,7 +2362,7 @@ function renderItinerary() {
         <div class="stop-body">
           <div class="stop-name">${cat.emoji} ${esc(s.name)}${newChip}${costChip}${stayChip}${closedChip}</div>
           ${s.address ? `<div class="stop-addr">${esc(s.address)}</div>` : ""}
-          ${s.notes ? `<div class="stop-notes">${esc(s.notes)}</div>` : ""}
+          ${s.notes ? `<div class="stop-notes">${linkify(esc(s.notes))}</div>` : ""}
           <div class="stop-actions">
             <button class="icon-btn vote-up ${vs.mine === 1 ? "voted" : ""}" title="Vote up">👍 ${vs.up || ""}</button>
             <button class="icon-btn vote-down ${vs.mine === -1 ? "voted" : ""}" title="Vote down">👎 ${vs.down || ""}</button>
@@ -2432,6 +2442,70 @@ function renderItinerary() {
   footer.className = "itinerary-footer";
   footer.innerHTML = `<span style="font-size:12px;color:var(--ink-soft)">Tip: drag stops between days, or click the map to add one.</span>`;
   wrap.appendChild(footer);
+}
+
+/* ---------- task assignments: who's booking what ---------- */
+function showTasksModal() {
+  openModal(`
+    <h2>📋 Trip tasks</h2>
+    <div id="t-body" style="font-size:13.5px;color:var(--ink-soft)">Loading…</div>`);
+  refreshTasks();
+}
+async function refreshTasks() {
+  const body = $("t-body");
+  if (!body || !state.trip) return;
+  const [taskRes, memRes] = await Promise.all([
+    sb.from("trip_tasks").select("*").eq("trip_id", state.trip.id).order("created_at"),
+    sb.rpc("jj_trip_members", { t: state.trip.id }),
+  ]);
+  if (taskRes.error || memRes.error || !Array.isArray(memRes.data)) { body.textContent = "Couldn't load tasks."; return; }
+  const tasks = taskRes.data || [], members = memRes.data;
+  const meId = state.user && state.user.id;
+  const iOwn = state.trip.owner_id === meId;
+  const open = tasks.filter(t => !t.done), closed = tasks.filter(t => t.done);
+  const row = (t) => `
+    <div style="display:flex;align-items:center;gap:9px;padding:8px 2px;border-bottom:1px solid var(--line);${t.done ? "opacity:.55" : ""}">
+      <button class="icon-btn t-tgl" data-id="${esc(t.id)}" title="${t.done ? "Reopen" : "Mark done"}" style="font-size:16px">${t.done ? "✅" : "⬜"}</button>
+      <span style="color:var(--ink);${t.done ? "text-decoration:line-through" : ""}">${esc(t.title)}</span>
+      ${t.assignee_name ? `<span class="cost-chip" style="background:#eef4f4">👤 ${esc(t.assignee_name)}</span>` : ""}
+      ${(iOwn || t.created_by === meId || t.assignee_id === meId) ? `<button class="icon-btn t-del" data-id="${esc(t.id)}" title="Delete" style="margin-left:auto;font-size:12px">🗑️</button>` : ""}
+    </div>`;
+  body.innerHTML = `
+    ${open.length ? open.map(row).join("") : `<div style="padding:6px 0 2px">No open tasks — add "book the restaurant"-type jobs and hand them out.</div>`}
+    ${closed.length ? `<div style="font-size:12px;font-weight:700;margin:12px 0 2px;text-transform:uppercase;letter-spacing:.05em">Done (${closed.length})</div>` + closed.map(row).join("") : ""}
+    <div style="font-weight:700;font-size:14px;margin:14px 0 6px;color:var(--ink)">Add a task</div>
+    <div class="field"><input id="t-title" placeholder="e.g. Book the Saturday restaurant" maxlength="140"></div>
+    <div class="field"><select id="t-who">
+      <option value="">Anyone</option>
+      ${members.map(m => `<option value="${esc(m.user_id)}" ${m.user_id === meId ? "selected" : ""}>${esc(m.name)}${m.user_id === meId ? " (me)" : ""}</option>`).join("")}
+    </select></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Close</button>
+      <button class="btn primary" id="t-add">Add task</button>
+    </div>`;
+  const nameOf = {};
+  for (const m of members) nameOf[m.user_id] = m.name;
+  for (const b of body.querySelectorAll(".t-tgl")) b.onclick = async () => {
+    const t = tasks.find(x => x.id === b.dataset.id);
+    await sb.from("trip_tasks").update({ done: !t.done }).eq("id", t.id);
+    refreshTasks();
+  };
+  for (const b of body.querySelectorAll(".t-del")) b.onclick = async () => {
+    await sb.from("trip_tasks").delete().eq("id", b.dataset.id);
+    refreshTasks();
+  };
+  $("t-add").onclick = async () => {
+    const title = $("t-title").value.trim();
+    if (!title) { toast("What needs doing?"); return; }
+    const who = $("t-who").value || null;
+    const { error } = await sb.from("trip_tasks").insert({
+      trip_id: state.trip.id, title,
+      assignee_id: who, assignee_name: who ? nameOf[who] || null : null,
+    });
+    if (error) { toast("Couldn't add the task"); return; }
+    refreshTasks();
+  };
+  $("t-title").addEventListener("keydown", (e) => { if (e.key === "Enter") $("t-add").click(); });
 }
 
 /* ---------- date polling: when can everyone go? ---------- */
@@ -3048,7 +3122,7 @@ function showAuth() {
   $("user-chip").style.display = "none";
   $("signout-btn").style.display = "none";
   $("header-trip-info").style.display = "none";
-  for (const b of ["share-btn", "refresh-btn", "back-btn", "edit-trip-btn", "expenses-btn"]) $(b).style.display = "none";
+  for (const b of ["share-btn", "refresh-btn", "back-btn", "edit-trip-btn", "expenses-btn", "tasks-btn"]) $(b).style.display = "none";
   $("auth-step-email").style.display = "";
   $("auth-step-code").style.display = "none";
   $("auth-note").textContent = "";
