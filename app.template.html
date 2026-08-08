@@ -327,6 +327,7 @@ header {
 .day-load.tight { color: #c0392b; font-weight: 700; }
 .day-warn { background: #fdf1e3; color: #a35a00; border: 1px solid #edcfa3; border-radius: 10px; padding: 7px 11px; font-size: 12.5px; margin: 8px 0 4px; }
 .closed-chip { background: #fdeaea !important; color: #a33333 !important; cursor: help; }
+.slot-header { margin: 10px 0 4px 6px; font-size: 11.5px; font-weight: 700; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .06em; }
 body.dark .closed-chip { background: #4a2525 !important; color: #f0b6b6 !important; }
 body.dark .day-warn { background: #3a2c18; color: #f0c896; border-color: #6b4e1f; }
 .stop-num.checked { background: #3f9d64 !important; }
@@ -2296,7 +2297,7 @@ function renderItinerary() {
     }
     section.addEventListener("dragover", (e) => sectionDragOver(e, section));
     section.addEventListener("drop", (e) => sectionDrop(e, d));
-    let num = 0;
+    let num = 0, lastSlotShown = null;
     for (const s of stops) {
       num++;
       const cat = CATEGORIES[s.category] || CATEGORIES.other;
@@ -2328,6 +2329,7 @@ function renderItinerary() {
             <button class="icon-btn vote-down ${vs.mine === -1 ? "voted" : ""}" title="Vote down">👎 ${vs.down || ""}</button>
             <button class="icon-btn mv-up" title="Move up">↑</button>
             <button class="icon-btn mv-down" title="Move down">↓</button>
+            ${d > 0 ? `<button class="icon-btn slot-btn" title="Time of day: ${s.slot ? SLOT_META[s.slot].label.toLowerCase() : "anytime"} — tap to change">${s.slot && SLOT_META[s.slot] ? SLOT_META[s.slot].emoji : "🕒"}</button>` : ""}
             ${s.lat != null && d > 0 ? `<button class="icon-btn nav-btn" title="Directions in Apple Maps">🧭</button>` : ""}
             <button class="icon-btn edit-btn" title="Edit">✏️</button>
             <select class="day-select">${dayOpts}</select>
@@ -2348,9 +2350,18 @@ function renderItinerary() {
       card.querySelector(".edit-btn").onclick = () => openStopForm(null, s);
       const navBtn = card.querySelector(".nav-btn");
       if (navBtn) navBtn.onclick = () => openDirections(s);
+      const slotBtn = card.querySelector(".slot-btn");
+      if (slotBtn) slotBtn.onclick = () => setStopSlot(s, nextSlot(s.slot));
       const numEl = card.querySelector(".stop-num");
       if (d > 0) numEl.onclick = () => toggleVisited(s);
       card.querySelector(".day-select").onchange = (e) => setStopDay(s, parseInt(e.target.value, 10));
+      if (d > 0 && s.slot && s.slot !== lastSlotShown && SLOT_META[s.slot]) {
+        const hdr = document.createElement("div");
+        hdr.className = "slot-header";
+        hdr.textContent = `${SLOT_META[s.slot].emoji} ${SLOT_META[s.slot].label}`;
+        section.appendChild(hdr);
+        lastSlotShown = s.slot;
+      }
       if (travel) {
         const ri = routable.indexOf(s);
         if (ri > 0 && travel.legs[ri - 1]) {
@@ -2390,6 +2401,44 @@ function renderItinerary() {
   footer.className = "itinerary-footer";
   footer.innerHTML = `<span style="font-size:12px;color:var(--ink-soft)">Tip: drag stops between days, or click the map to add one.</span>`;
   wrap.appendChild(footer);
+}
+
+/* ---------- time-of-day slots within a day ---------- */
+const SLOT_META = {
+  morning:   { emoji: "🌅", label: "Morning",   rank: 0 },
+  afternoon: { emoji: "☀️", label: "Afternoon", rank: 1 },
+  evening:   { emoji: "🌙", label: "Evening",   rank: 2 },
+};
+function nextSlot(cur) {
+  return !cur ? "morning" : cur === "morning" ? "afternoon" : cur === "afternoon" ? "evening" : null;
+}
+async function setStopSlot(s, slot) {
+  s.slot = slot;
+  if (slot && s.day_index > 0) {
+    // move the stop to the end of its new slot group within the day
+    const day = state.stops.filter(x => x.day_index === s.day_index && x.id !== s.id)
+      .sort((a, b) => a.order_index - b.order_index);
+    let insertAt = day.length;
+    const lastSame = day.map(x => x.slot).lastIndexOf(slot);
+    if (lastSame >= 0) insertAt = lastSame + 1;
+    else {
+      const firstLater = day.findIndex(x => x.slot && SLOT_META[x.slot].rank > SLOT_META[slot].rank);
+      if (firstLater >= 0) insertAt = firstLater;
+    }
+    day.splice(insertAt, 0, s);
+    const ops = [];
+    day.forEach((x, i) => {
+      if (x.order_index !== i || x.id === s.id) {
+        x.order_index = i;
+        ops.push(sb.from("trip_stops").update(x.id === s.id ? { slot, order_index: i } : { order_index: i }).eq("id", x.id));
+      }
+    });
+    renderItinerary(); renderMarkers();
+    await Promise.all(ops);
+  } else {
+    renderItinerary();
+    await sb.from("trip_stops").update({ slot }).eq("id", s.id);
+  }
 }
 
 /* ---------- opening hours (best-effort OSM opening_hours subset) ---------- */
