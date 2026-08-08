@@ -542,6 +542,7 @@ header {
   <span id="offline-chip" style="display:none;font-size:11.5px;font-weight:700;color:#7a5312;background:#fdf3e3;border:1px solid #f0d9ad;border-radius:8px;padding:3px 9px;white-space:nowrap">📴 Offline — saved copy</span>
   <span id="user-chip" style="display:none;font-size:12.5px;color:var(--ink-soft)"></span>
   <button class="btn subtle" id="signout-btn" style="display:none">Sign out</button>
+  <button class="btn subtle" id="edit-trip-btn" style="display:none" title="Edit name, destination, or dates">✏️ Edit</button>
   <button class="btn subtle" id="share-btn" style="display:none">🔗 Share code</button>
   <button class="btn subtle" id="refresh-btn" style="display:none" title="Refresh from server">↻ Sync</button>
   <button class="btn subtle" id="back-btn" style="display:none">← All trips</button>
@@ -781,7 +782,7 @@ function renderTripGrid() {
   const newCard = document.createElement("div");
   newCard.className = "trip-card new";
   newCard.innerHTML = `<div class="plus">+</div><div>New trip</div>`;
-  newCard.onclick = showCreateTrip;
+  newCard.onclick = () => showCreateTrip();
   grid.appendChild(newCard);
   for (const t of state.trips) {
     const card = document.createElement("div");
@@ -817,9 +818,9 @@ function confirmDeleteTrip(t) {
   };
 }
 
-function showCreateTrip() {
+function showCreateTrip(existing = null) {
   openModal(`
-    <h2>New trip</h2>
+    <h2>${existing ? "Edit trip" : "New trip"}</h2>
     <div class="field"><label>Trip name</label><input id="m-name" placeholder="Tokyo with the crew"></div>
     <div class="field dest-wrap"><label>Destination</label><input id="m-dest" placeholder="Start typing… e.g. Tokyo" autocomplete="off">
       <div id="dest-results"></div>
@@ -833,8 +834,15 @@ function showCreateTrip() {
     </div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal()">Cancel</button>
-      <button class="btn primary" id="m-create">Create trip</button>
+      <button class="btn primary" id="m-create">${existing ? "Save changes" : "Create trip"}</button>
     </div>`);
+  if (existing) {
+    $("m-name").value = existing.name || "";
+    $("m-dest").value = existing.destination || "";
+    $("m-start").value = existing.start_date || "";
+    $("m-end").value = existing.end_date || "";
+    $("m-currency").value = existing.currency || "USD";
+  }
   $("m-name").focus();
 
   // --- destination autocomplete ---
@@ -876,11 +884,40 @@ function showCreateTrip() {
     if (!name) { toast("Give the trip a name"); return; }
     const destText = destInput.value.trim();
     // if they typed a destination but didn't pick from the list, geocode it best-effort
-    if (!chosenDest && destText) {
+    const destChanged = !existing || destText !== (existing.destination || "");
+    if (!chosenDest && destText && destChanged) {
       try {
         const data = await geoSearch(destText, { limit: 1 });
         if (data.length) chosenDest = { lat: +data[0].lat, lng: +data[0].lon, bbox: data[0].boundingbox || null, label: destText };
       } catch (e) {}
+    }
+    if (existing) {
+      const patch = {
+        name,
+        destination: destText || null,
+        start_date: $("m-start").value || null,
+        end_date: $("m-end").value || null,
+        currency: $("m-currency").value,
+      };
+      if (destChanged) {
+        patch.dest_lat = chosenDest ? chosenDest.lat : null;
+        patch.dest_lng = chosenDest ? chosenDest.lng : null;
+        patch.dest_bbox = chosenDest ? chosenDest.bbox : null;
+      }
+      const { error } = await sb.from("trip_trips").update(patch).eq("id", existing.id);
+      if (error) { toast("Couldn't save changes"); console.error(error); return; }
+      closeModal();
+      if (state.trip && state.trip.id === existing.id) {
+        Object.assign(state.trip, patch);
+        $("header-trip-name").textContent = state.trip.name;
+        $("header-trip-dates").textContent = " · " + (state.trip.destination || "") +
+          (state.trip.start_date ? " · " + fmtRange(state.trip.start_date, state.trip.end_date) : "");
+        renderItinerary();
+        loadWeather();
+        if (destChanged) { state._fitted = false; centerOnDestination(); }
+      }
+      toast("Trip updated");
+      return;
     }
     const row = {
       name,
@@ -1070,6 +1107,7 @@ function showTripView() {
     (state.trip.start_date ? " · " + fmtRange(state.trip.start_date, state.trip.end_date) : "");
   $("back-btn").style.display = "";
   $("share-btn").style.display = "";
+  $("edit-trip-btn").style.display = "";
   $("refresh-btn").style.display = "";
   initMap();
   setTab("itin");
@@ -1088,11 +1126,13 @@ function showHome() {
   $("header-trip-info").style.display = "none";
   $("back-btn").style.display = "none";
   $("share-btn").style.display = "none";
+  $("edit-trip-btn").style.display = "none";
   $("refresh-btn").style.display = "none";
   loadTrips();
 }
 
 $("back-btn").onclick = showHome;
+$("edit-trip-btn").onclick = () => showCreateTrip(state.trip);
 $("logo-btn").onclick = showHome;
 $("refresh-btn").onclick = async () => { await reloadTripData(); toast("Synced"); };
 $("share-btn").onclick = async () => {
@@ -2533,7 +2573,7 @@ function showAuth() {
   $("user-chip").style.display = "none";
   $("signout-btn").style.display = "none";
   $("header-trip-info").style.display = "none";
-  for (const b of ["share-btn", "refresh-btn", "back-btn"]) $(b).style.display = "none";
+  for (const b of ["share-btn", "refresh-btn", "back-btn", "edit-trip-btn"]) $(b).style.display = "none";
   $("auth-step-email").style.display = "";
   $("auth-step-code").style.display = "none";
   $("auth-note").textContent = "";
