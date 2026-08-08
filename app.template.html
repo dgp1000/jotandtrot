@@ -1359,29 +1359,6 @@ function renderSuggestions() {
     wrap.appendChild(bar);
   }
 
-  // during the trip: a "what's next" hero for today
-  if (todayIdx > 0) {
-    const todays = state.stops.filter(s => s.day_index === todayIdx).sort((a, b) => a.order_index - b.order_index);
-    const next = todays.find(s => !s.visited_at);
-    const wx = state.weather && state.weather[dayISO(state.trip, todayIdx)];
-    const bar = document.createElement("div");
-    bar.className = "today-bar";
-    bar.innerHTML = `
-      <div class="today-line">Day ${todayIdx} of ${dayCount} — today${wx ? ` · ${wx.emoji} ${wx.max}°` : ""}</div>
-      ${next
-        ? `<div class="today-next">Up next: ${esc(next.name)}</div>
-           ${next.lat != null ? `<button class="btn nav-next">🧭 Directions</button>` : ""}
-           <button class="btn done-next">✓ Done, what's next?</button>`
-        : todays.length
-          ? `<div class="today-next">All checked off for today 🎉</div>`
-          : `<div class="today-next">Nothing planned today — drag a stop in or scout the map ✨</div>`}`;
-    if (next) {
-      const nav = bar.querySelector(".nav-next");
-      if (nav) nav.onclick = () => openDirections(next);
-      bar.querySelector(".done-next").onclick = () => toggleVisited(next);
-    }
-    wrap.appendChild(bar);
-  }
   for (const [kind, title] of KIND_GROUPS) {
     const items = live.filter(g => g.kind === kind);
     if (!items.length) continue;
