@@ -963,6 +963,8 @@ async function openTrip(id) {
     state.votes = cached.votes || [];
     state.suggestions = cached.suggestions || [];
     state.comments = cached.comments || [];
+    state.dateOptions = cached.dateOptions || [];
+    state.dateVotes = cached.dateVotes || [];
     state._fitted = false;
     showTripView();
     toast("📴 Offline — showing your saved copy of this trip");
@@ -1037,6 +1039,8 @@ function subscribeRealtime(tripId) {
       .on("postgres_changes", { event: "*", schema: "public", table: "trip_votes", filter: `trip_id=eq.${tripId}` }, onChange)
       .on("postgres_changes", { event: "*", schema: "public", table: "trip_suggestions", filter: `trip_id=eq.${tripId}` }, onChange)
       .on("postgres_changes", { event: "*", schema: "public", table: "trip_expenses", filter: `trip_id=eq.${tripId}` }, () => { if ($("x-body")) refreshExpenses(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_date_options", filter: `trip_id=eq.${tripId}` }, onChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_date_votes", filter: `trip_id=eq.${tripId}` }, onChange)
       .on("postgres_changes", { event: "*", schema: "public", table: "trip_comments", filter: `trip_id=eq.${tripId}` }, async () => {
         const { data } = await sb.from("trip_comments").select("*").eq("trip_id", tripId).order("created_at");
         if (data && state.trip && state.trip.id === tripId) { state.comments = data; renderItinerary(); renderCommentList(); }
@@ -1053,11 +1057,13 @@ function unsubscribeRealtime() {
 
 async function reloadTripData() {
   const tripId = state.trip.id;
-  const [stopsRes, votesRes, suggRes, cmtRes] = await Promise.all([
+  const [stopsRes, votesRes, suggRes, cmtRes, dopRes, dovRes] = await Promise.all([
     sb.from("trip_stops").select("*").eq("trip_id", tripId).order("day_index").order("order_index"),
     sb.from("trip_votes").select("*, trip_stops!inner(trip_id)").eq("trip_stops.trip_id", tripId),
     sb.from("trip_suggestions").select("*").eq("trip_id", tripId).order("created_at", { ascending: false }),
     sb.from("trip_comments").select("*").eq("trip_id", tripId).order("created_at"),
+    sb.from("trip_date_options").select("*").eq("trip_id", tripId).order("start_date"),
+    sb.from("trip_date_votes").select("*").eq("trip_id", tripId),
   ]);
   if (stopsRes.error) {
     // network trouble mid-trip: show the saved copy rather than a blank screen
@@ -1074,10 +1080,13 @@ async function reloadTripData() {
   state.votes = votesRes.data || [];
   state.suggestions = suggRes.data || [];
   state.comments = cmtRes && cmtRes.data || [];
-  writeCache("trip:" + tripId, { trip: state.trip, stops: state.stops, votes: state.votes, suggestions: state.suggestions, comments: state.comments, savedAt: Date.now() });
+  state.dateOptions = dopRes && dopRes.data || [];
+  state.dateVotes = dovRes && dovRes.data || [];
+  writeCache("trip:" + tripId, { trip: state.trip, stops: state.stops, votes: state.votes, suggestions: state.suggestions, comments: state.comments, dateOptions: state.dateOptions, dateVotes: state.dateVotes, savedAt: Date.now() });
   renderItinerary();
   renderSuggestions();
   renderMarkers();
+  renderDatePoll();
 }
 
 /* ---------- sidebar tabs ---------- */
@@ -2243,6 +2252,19 @@ function renderItinerary() {
     wrap.appendChild(bar);
   }
 
+  // undated trip: rally the crew around a date poll
+  if (!state.trip.start_date) {
+    const nOpts = (state.dateOptions || []).length;
+    const bar = document.createElement("div");
+    bar.className = "today-bar";
+    bar.innerHTML = `
+      <div class="today-line">📅 No dates yet</div>
+      <div class="today-next">${nOpts ? `Date poll: ${nOpts} option${nOpts > 1 ? "s" : ""} on the table` : "When can everyone go? Poll the crew."}</div>
+      <button class="btn dp-open">${nOpts ? "Vote on dates" : "Start a date poll"}</button>`;
+    bar.querySelector(".dp-open").onclick = showDatePoll;
+    wrap.appendChild(bar);
+  }
+
   // during the trip: a "what's next" hero for today
   if (todayIdx > 0) {
     const todays = state.stops.filter(s => s.day_index === todayIdx).sort((a, b) => a.order_index - b.order_index);
@@ -2410,6 +2432,113 @@ function renderItinerary() {
   footer.className = "itinerary-footer";
   footer.innerHTML = `<span style="font-size:12px;color:var(--ink-soft)">Tip: drag stops between days, or click the map to add one.</span>`;
   wrap.appendChild(footer);
+}
+
+/* ---------- date polling: when can everyone go? ---------- */
+function dateOptLabel(o) {
+  const wd = (d) => new Date(d + "T12:00:00").toLocaleDateString(undefined, { weekday: "short" });
+  const nights = Math.round((new Date(o.end_date) - new Date(o.start_date)) / 86400000);
+  return `${wd(o.start_date)} ${fmtDate(o.start_date)} – ${wd(o.end_date)} ${fmtDate(o.end_date)} · ${nights + 1} day${nights ? "s" : ""}`;
+}
+function showDatePoll() {
+  openModal(`
+    <h2>📅 When can everyone go?</h2>
+    <p style="font-size:13px;color:var(--ink-soft);margin:6px 0 10px">
+      Propose date windows and have the crew vote ✅ works, 🤷 if need be, ❌ can't.
+      Anyone can apply the winner to the trip.</p>
+    <div id="dp-list"></div>
+    <div style="font-weight:700;font-size:14px;margin:14px 0 6px;color:var(--ink)">Suggest dates</div>
+    <div class="field-row">
+      <div class="field"><input id="dp-start" type="date"></div>
+      <div class="field"><input id="dp-end" type="date"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Close</button>
+      <button class="btn primary" id="dp-add">＋ Add option</button>
+    </div>`);
+  renderDatePoll();
+  $("dp-add").onclick = async () => {
+    const a = $("dp-start").value, b = $("dp-end").value;
+    if (!a || !b) { toast("Pick both dates"); return; }
+    if (b < a) { toast("End date is before the start"); return; }
+    const { data, error } = await sb.from("trip_date_options").insert({
+      trip_id: state.trip.id, start_date: a, end_date: b,
+    }).select().single();
+    if (error) { toast("Couldn't add those dates"); return; }
+    state.dateOptions = [...(state.dateOptions || []), data].sort((x, y) => x.start_date < y.start_date ? -1 : 1);
+    $("dp-start").value = ""; $("dp-end").value = "";
+    renderDatePoll();
+  };
+}
+function renderDatePoll() {
+  const box = $("dp-list");
+  if (!box || !state.trip) return;
+  const meId = state.user && state.user.id;
+  const iOwn = state.trip.owner_id === meId;
+  const opts = state.dateOptions || [];
+  if (!opts.length) { box.innerHTML = `<div style="color:var(--ink-soft);font-size:13.5px;padding:4px 0">No options yet — suggest the first date window below.</div>`; return; }
+  const score = (o) => {
+    const vs = (state.dateVotes || []).filter(v => v.option_id === o.id);
+    return { yes: vs.filter(v => v.value === 2), maybe: vs.filter(v => v.value === 1), no: vs.filter(v => v.value === 0),
+             pts: vs.reduce((a, v) => a + v.value, 0) };
+  };
+  const best = Math.max(...opts.map(o => score(o).pts));
+  box.innerHTML = "";
+  for (const o of opts) {
+    const sc = score(o);
+    const mine = (state.dateVotes || []).find(v => v.option_id === o.id && v.user_id === meId);
+    const names = (l) => l.map(v => v.voter_name || "someone").join(", ");
+    const row = document.createElement("div");
+    row.style.cssText = "padding:9px 2px;border-bottom:1px solid var(--line)";
+    row.innerHTML = `
+      <div style="display:flex;align-items:baseline;gap:8px">
+        <b style="color:var(--ink);font-size:13.5px">${esc(dateOptLabel(o))}</b>
+        ${sc.pts > 0 && sc.pts === best ? `<span class="cost-chip" style="background:#e7f4ec;color:#2c6e49">⭐ leading</span>` : ""}
+        ${(iOwn || o.created_by === meId) ? `<button class="icon-btn dp-del" title="Remove option" style="margin-left:auto;font-size:12px">🗑️</button>` : ""}
+      </div>
+      <div style="display:flex;gap:6px;margin-top:6px;align-items:center">
+        <button class="icon-btn dp-v2 ${mine && mine.value === 2 ? "voted" : ""}" title="${esc(names(sc.yes) || "no one yet")}">✅ ${sc.yes.length || ""}</button>
+        <button class="icon-btn dp-v1 ${mine && mine.value === 1 ? "voted" : ""}" title="${esc(names(sc.maybe) || "no one yet")}">🤷 ${sc.maybe.length || ""}</button>
+        <button class="icon-btn dp-v0 ${mine && mine.value === 0 ? "voted" : ""}" title="${esc(names(sc.no) || "no one yet")}">❌ ${sc.no.length || ""}</button>
+        <button class="btn subtle dp-use" style="margin-left:auto;font-size:12px">Use these dates</button>
+      </div>`;
+    for (const val of [0, 1, 2]) {
+      row.querySelector(`.dp-v${val}`).onclick = () => castDateVote(o, val, mine);
+    }
+    row.querySelector(".dp-use").onclick = async () => {
+      const patch = { start_date: o.start_date, end_date: o.end_date };
+      const { error } = await sb.from("trip_trips").update(patch).eq("id", state.trip.id);
+      if (error) { toast("Couldn't set the dates"); return; }
+      Object.assign(state.trip, patch);
+      closeModal();
+      $("header-trip-dates").textContent = " · " + (state.trip.destination || "") +
+        " · " + fmtRange(state.trip.start_date, state.trip.end_date);
+      renderItinerary();
+      loadWeather();
+      toast(`📅 Trip set: ${fmtRange(o.start_date, o.end_date)}`);
+    };
+    const del = row.querySelector(".dp-del");
+    if (del) del.onclick = async () => {
+      await sb.from("trip_date_options").delete().eq("id", o.id);
+      state.dateOptions = opts.filter(x => x.id !== o.id);
+      renderDatePoll();
+      renderItinerary();
+    };
+    box.appendChild(row);
+  }
+}
+async function castDateVote(o, value, mine) {
+  const meId = state.user && state.user.id;
+  if (mine && mine.value === value) {
+    state.dateVotes = (state.dateVotes || []).filter(v => !(v.option_id === o.id && v.user_id === meId));
+    renderDatePoll();
+    await sb.from("trip_date_votes").delete().eq("option_id", o.id).eq("user_id", meId);
+  } else {
+    const row = { option_id: o.id, trip_id: state.trip.id, user_id: meId, voter_name: state.voterName || "traveler", value };
+    state.dateVotes = [...(state.dateVotes || []).filter(v => !(v.option_id === o.id && v.user_id === meId)), row];
+    renderDatePoll();
+    await sb.from("trip_date_votes").upsert(row, { onConflict: "option_id,user_id" });
+  }
 }
 
 /* ---------- comments on stops ---------- */
