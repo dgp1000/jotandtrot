@@ -312,6 +312,17 @@ header {
 .day-header .day-title { font-weight: 700; font-size: 14px; letter-spacing: -0.01em; }
 .day-header .day-date { color: var(--ink-soft); font-size: 12px; }
 .day-header .day-count { margin-left: auto; color: var(--ink-soft); font-size: 12px; }
+.day-wx { color: var(--ink-soft); font-size: 12px; margin-left: 8px; white-space: nowrap; }
+.today-chip { background: var(--amber); color: #fff; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; margin-left: 8px; letter-spacing: .04em; }
+.today-bar { margin: 10px 12px; padding: 12px 14px; border-radius: 12px; background: var(--teal); color: #fff; }
+.today-bar .today-line { font-size: 12px; opacity: .85; margin-bottom: 4px; }
+.today-bar .today-next { font-size: 14.5px; font-weight: 700; margin-bottom: 10px; }
+.today-bar .btn { background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.4); color: #fff; margin-right: 8px; }
+.today-bar .btn:hover { background: rgba(255,255,255,.25); color: #fff; border-color: #fff; }
+.stop-card.visited { opacity: .55; }
+.stop-card.visited .stop-name { text-decoration: line-through; text-decoration-thickness: 1.5px; }
+.stop-num.checkable { cursor: pointer; }
+.stop-num.checked { background: #3f9d64 !important; }
 .stop-card {
   display: flex;
   gap: 10px;
@@ -683,6 +694,25 @@ function tripDayCount(trip) {
   for (const s of state.stops) if (s.day_index > n) n = s.day_index;
   return n;
 }
+/* ---------- today mode (during the trip) ---------- */
+function localISODate(d) {
+  const x = d || new Date();
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+}
+function dayISO(trip, dayIndex) {
+  if (!trip.start_date || dayIndex < 1) return "";
+  const dt = new Date(trip.start_date + "T12:00:00");
+  dt.setDate(dt.getDate() + (dayIndex - 1));
+  return localISODate(dt);
+}
+function todayDayIndex(trip) {
+  if (!trip || !trip.start_date) return 0;
+  const today = localISODate();
+  const end = trip.end_date || trip.start_date;
+  if (today < trip.start_date || today > end) return 0;
+  const n = Math.round((new Date(today + "T12:00:00") - new Date(trip.start_date + "T12:00:00")) / 86400000) + 1;
+  return Math.min(Math.max(n, 1), tripDayCount(trip));
+}
 const CURRENCY_SYMBOLS = { USD: "$", EUR: "€", GBP: "£", JPY: "¥", BRL: "R$", CAD: "C$", AUD: "A$", MXN: "MX$", CHF: "CHF ", INR: "₹", KRW: "₩", CNY: "¥" };
 function money(amount) {
   if (amount == null || isNaN(amount)) return "";
@@ -911,6 +941,8 @@ async function openTrip(id) {
   jjStore.setItem("jj-seen:" + id, String(Date.now()));
   showTripView();
   subscribeRealtime(id);
+  loadWeather();
+  scrollToToday();
   await backfillDestCoords();
   maybeAutoSuggest();
 }
@@ -1324,6 +1356,30 @@ function renderSuggestions() {
     bar.className = "sugg-topbar";
     bar.innerHTML = `<button class="btn primary" title="Slot every available idea into the schedule">⚡ Slot all of these into the schedule</button>`;
     bar.querySelector("button").onclick = autoPlan;
+    wrap.appendChild(bar);
+  }
+
+  // during the trip: a "what's next" hero for today
+  if (todayIdx > 0) {
+    const todays = state.stops.filter(s => s.day_index === todayIdx).sort((a, b) => a.order_index - b.order_index);
+    const next = todays.find(s => !s.visited_at);
+    const wx = state.weather && state.weather[dayISO(state.trip, todayIdx)];
+    const bar = document.createElement("div");
+    bar.className = "today-bar";
+    bar.innerHTML = `
+      <div class="today-line">Day ${todayIdx} of ${dayCount} — today${wx ? ` · ${wx.emoji} ${wx.max}°` : ""}</div>
+      ${next
+        ? `<div class="today-next">Up next: ${esc(next.name)}</div>
+           ${next.lat != null ? `<button class="btn nav-next">🧭 Directions</button>` : ""}
+           <button class="btn done-next">✓ Done, what's next?</button>`
+        : todays.length
+          ? `<div class="today-next">All checked off for today 🎉</div>`
+          : `<div class="today-next">Nothing planned today — drag a stop in or scout the map ✨</div>`}`;
+    if (next) {
+      const nav = bar.querySelector(".nav-next");
+      if (nav) nav.onclick = () => openDirections(next);
+      bar.querySelector(".done-next").onclick = () => toggleVisited(next);
+    }
     wrap.appendChild(bar);
   }
   for (const [kind, title] of KIND_GROUPS) {
@@ -2130,6 +2186,7 @@ function renderItinerary() {
   const wrap = $("itinerary");
   wrap.innerHTML = "";
   const dayCount = tripDayCount(state.trip);
+  const todayIdx = todayDayIndex(state.trip);
   const days = [0];
   for (let d = 1; d <= dayCount; d++) days.push(d);
   let tripTotal = 0;
@@ -2141,6 +2198,30 @@ function renderItinerary() {
     bar.className = "autoplan-bar";
     bar.innerHTML = `<button class="btn primary" title="Slot every available idea into the schedule">⚡ Auto-build schedule · ${plannable} idea${plannable > 1 ? "s" : ""} ready</button>`;
     bar.querySelector("button").onclick = autoPlan;
+    wrap.appendChild(bar);
+  }
+
+  // during the trip: a "what's next" hero for today
+  if (todayIdx > 0) {
+    const todays = state.stops.filter(s => s.day_index === todayIdx).sort((a, b) => a.order_index - b.order_index);
+    const next = todays.find(s => !s.visited_at);
+    const wx = state.weather && state.weather[dayISO(state.trip, todayIdx)];
+    const bar = document.createElement("div");
+    bar.className = "today-bar";
+    bar.innerHTML = `
+      <div class="today-line">Day ${todayIdx} of ${dayCount} — today${wx ? ` · ${wx.emoji} ${wx.max}°` : ""}</div>
+      ${next
+        ? `<div class="today-next">Up next: ${esc(next.name)}</div>
+           ${next.lat != null ? `<button class="btn nav-next">🧭 Directions</button>` : ""}
+           <button class="btn done-next">✓ Done, what's next?</button>`
+        : todays.length
+          ? `<div class="today-next">All checked off for today 🎉</div>`
+          : `<div class="today-next">Nothing planned today — drag a stop in or scout the map ✨</div>`}`;
+    if (next) {
+      const nav = bar.querySelector(".nav-next");
+      if (nav) nav.onclick = () => openDirections(next);
+      bar.querySelector(".done-next").onclick = () => toggleVisited(next);
+    }
     wrap.appendChild(bar);
   }
 
@@ -2163,8 +2244,8 @@ function renderItinerary() {
     if (dayTotal > 0) anyCost = true;
     section.innerHTML = `
       <div class="day-header">
-        <span class="day-title">${title}</span>
-        <span class="day-date">${esc(date)}</span>
+        <span class="day-title">${title}</span>${d === todayIdx ? '<span class="today-chip">TODAY</span>' : ""}
+        <span class="day-date">${esc(date)}${(() => { const w = d > 0 && state.weather && state.weather[dayISO(state.trip, d)]; return w ? `<span class="day-wx">${w.emoji} ${w.max}°</span>` : ""; })()}</span>
         <span class="day-count">${dayTotal > 0 ? `<span class="day-total">${money(dayTotal)}</span> · ` : ""}${stops.length ? stops.length + " stop" + (stops.length > 1 ? "s" : "") : ""}</span>
       </div>`;
     if (!stops.length) {
@@ -2178,7 +2259,7 @@ function renderItinerary() {
       const cat = CATEGORIES[s.category] || CATEGORIES.other;
       const vs = voteSummary(s.id);
       const card = document.createElement("div");
-      card.className = "stop-card";
+      card.className = "stop-card" + (s.visited_at ? " visited" : "");
       card.dataset.id = s.id;
       card.draggable = true;
       let dayOpts = `<option value="0" ${d === 0 ? "selected" : ""}>💡 Ideas</option>`;
@@ -2190,7 +2271,7 @@ function renderItinerary() {
       const stayChip = nights ? `<span class="cost-chip stay-thru-chip" style="background:#eef4f4">🛏️ thru Day ${Math.max(s.end_day || s.day_index + 1, s.day_index + 1)}</span>` : "";
       const newChip = state.freshStopIds && state.freshStopIds.has(s.id) ? `<span class="new-chip">NEW</span>` : "";
       card.innerHTML = `
-        <div class="stop-num" style="background:${cat.color}">${d === 0 ? "★" : num}</div>
+        <div class="stop-num ${d > 0 ? "checkable" : ""} ${s.visited_at ? "checked" : ""}" title="${d > 0 ? (s.visited_at ? "Visited — tap to undo" : "Tap to mark visited") : ""}" style="background:${cat.color}">${s.visited_at ? "✓" : d === 0 ? "★" : num}</div>
         <div class="stop-body">
           <div class="stop-name">${cat.emoji} ${esc(s.name)}${newChip}${costChip}${stayChip}</div>
           ${s.address ? `<div class="stop-addr">${esc(s.address)}</div>` : ""}
@@ -2200,6 +2281,7 @@ function renderItinerary() {
             <button class="icon-btn vote-down ${vs.mine === -1 ? "voted" : ""}" title="Vote down">👎 ${vs.down || ""}</button>
             <button class="icon-btn mv-up" title="Move up">↑</button>
             <button class="icon-btn mv-down" title="Move down">↓</button>
+            ${s.lat != null && d > 0 ? `<button class="icon-btn nav-btn" title="Directions in Apple Maps">🧭</button>` : ""}
             <button class="icon-btn edit-btn" title="Edit">✏️</button>
             <select class="day-select">${dayOpts}</select>
           </div>
@@ -2217,6 +2299,10 @@ function renderItinerary() {
       card.querySelector(".mv-up").onclick = () => moveStop(s, -1);
       card.querySelector(".mv-down").onclick = () => moveStop(s, 1);
       card.querySelector(".edit-btn").onclick = () => openStopForm(null, s);
+      const navBtn = card.querySelector(".nav-btn");
+      if (navBtn) navBtn.onclick = () => openDirections(s);
+      const numEl = card.querySelector(".stop-num");
+      if (d > 0) numEl.onclick = () => toggleVisited(s);
       card.querySelector(".day-select").onchange = (e) => setStopDay(s, parseInt(e.target.value, 10));
       section.appendChild(card);
     }
@@ -2247,6 +2333,57 @@ function renderItinerary() {
   footer.className = "itinerary-footer";
   footer.innerHTML = `<span style="font-size:12px;color:var(--ink-soft)">Tip: drag stops between days, or click the map to add one.</span>`;
   wrap.appendChild(footer);
+}
+
+/* ---------- during-trip actions ---------- */
+function openDirections(s) {
+  if (s.lat == null) { toast("No location saved for this stop"); return; }
+  window.open(`https://maps.apple.com/?daddr=${s.lat},${s.lng}&q=${encodeURIComponent(s.name)}`, "_blank");
+}
+async function toggleVisited(s) {
+  if (s.day_index < 1) return;
+  const nowVisited = !s.visited_at;
+  s.visited_at = nowVisited ? new Date().toISOString() : null;
+  s.visited_by = nowVisited ? (state.user && state.user.id) || null : null;
+  renderItinerary();
+  try {
+    await sb.from("trip_stops").update({ visited_at: s.visited_at, visited_by: s.visited_by }).eq("id", s.id);
+  } catch (e) { toast("Couldn't save — check your connection"); }
+}
+
+/* per-day forecast (Open-Meteo, keyless): only for trip days within the next 16 days */
+const WX_EMOJI = [[0, "☀️"], [1, "🌤️"], [2, "⛅"], [3, "☁️"], [45, "🌫️"], [51, "🌦️"], [61, "🌧️"], [71, "🌨️"], [80, "🌧️"], [85, "🌨️"], [95, "⛈️"]];
+async function loadWeather() {
+  state.weather = null;
+  const t = state.trip;
+  if (!t || t.dest_lat == null || !t.start_date) return;
+  const today = localISODate();
+  const horizon = localISODate(new Date(Date.now() + 15 * 86400000));
+  const from = t.start_date > today ? t.start_date : today;
+  const to = (t.end_date || t.start_date) < horizon ? (t.end_date || t.start_date) : horizon;
+  if (from > to) return;
+  const unit = /^en-US/i.test(navigator.language || "") ? "fahrenheit" : "celsius";
+  try {
+    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${t.dest_lat}&longitude=${t.dest_lng}&daily=weather_code,temperature_2m_max&timezone=auto&start_date=${from}&end_date=${to}&temperature_unit=${unit}`);
+    const j = await r.json();
+    if (!j.daily || !j.daily.time) return;
+    const wx = {};
+    j.daily.time.forEach((iso, i) => {
+      const code = j.daily.weather_code[i];
+      let emoji = "☁️";
+      for (const [c, e] of WX_EMOJI) if (code >= c) emoji = e;
+      wx[iso] = { emoji, max: Math.round(j.daily.temperature_2m_max[i]) };
+    });
+    if (state.trip && state.trip.id === t.id) { state.weather = wx; renderItinerary(); }
+  } catch (e) { /* forecast is a nicety — never block the plan */ }
+}
+function scrollToToday() {
+  const d = todayDayIndex(state.trip);
+  if (!d) return;
+  setTimeout(() => {
+    const el = document.querySelector(`.day-section[data-day="${d}"]`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 400);
 }
 
 /* ---------- auto schedule builder ---------- */
