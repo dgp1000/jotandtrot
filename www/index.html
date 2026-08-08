@@ -548,6 +548,7 @@ body.dark .day-warn { background: #3a2c18; color: #f0c896; border-color: #6b4e1f
   <span id="user-chip" style="display:none;font-size:12.5px;color:var(--ink-soft)"></span>
   <button class="btn subtle" id="signout-btn" style="display:none">Sign out</button>
   <button class="btn subtle" id="edit-trip-btn" style="display:none" title="Edit name, destination, or dates">✏️ Edit</button>
+  <button class="btn subtle" id="expenses-btn" style="display:none" title="Log who paid and settle up">💸 Split</button>
   <button class="btn subtle" id="share-btn" style="display:none">🔗 Share code</button>
   <button class="btn subtle" id="refresh-btn" style="display:none" title="Refresh from server">↻ Sync</button>
   <button class="btn subtle" id="back-btn" style="display:none">← All trips</button>
@@ -1047,6 +1048,7 @@ function subscribeRealtime(tripId) {
       .on("postgres_changes", { event: "*", schema: "public", table: "trip_stops", filter: `trip_id=eq.${tripId}` }, onChange)
       .on("postgres_changes", { event: "*", schema: "public", table: "trip_votes", filter: `trip_id=eq.${tripId}` }, onChange)
       .on("postgres_changes", { event: "*", schema: "public", table: "trip_suggestions", filter: `trip_id=eq.${tripId}` }, onChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_expenses", filter: `trip_id=eq.${tripId}` }, () => { if ($("x-body")) refreshExpenses(); })
       .subscribe((status) => {
         $("live-dot").style.display = status === "SUBSCRIBED" ? "flex" : "none";
       });
@@ -1129,6 +1131,7 @@ function showTripView() {
   $("back-btn").style.display = "";
   $("share-btn").style.display = "";
   $("edit-trip-btn").style.display = "";
+  $("expenses-btn").style.display = "";
   $("refresh-btn").style.display = "";
   initMap();
   setTab("itin");
@@ -1148,12 +1151,14 @@ function showHome() {
   $("back-btn").style.display = "none";
   $("share-btn").style.display = "none";
   $("edit-trip-btn").style.display = "none";
+  $("expenses-btn").style.display = "none";
   $("refresh-btn").style.display = "none";
   loadTrips();
 }
 
 $("back-btn").onclick = showHome;
 $("edit-trip-btn").onclick = () => showCreateTrip(state.trip);
+$("expenses-btn").onclick = showExpensesModal;
 $("logo-btn").onclick = showHome;
 $("refresh-btn").onclick = async () => { await reloadTripData(); toast("Synced"); };
 $("share-btn").onclick = async () => {
@@ -2392,6 +2397,95 @@ function renderItinerary() {
   wrap.appendChild(footer);
 }
 
+/* ---------- expense splitting: who paid, who owes whom ---------- */
+function showExpensesModal() {
+  openModal(`
+    <h2>💸 Expense split</h2>
+    <div id="x-body" style="font-size:13.5px;color:var(--ink-soft)">Loading…</div>`);
+  refreshExpenses();
+}
+function settleUp(net) {
+  const owed = net.filter(b => b.net > 0.005).map(b => ({ ...b })).sort((a, b) => b.net - a.net);
+  const owes = net.filter(b => b.net < -0.005).map(b => ({ ...b, net: -b.net })).sort((a, b) => b.net - a.net);
+  const out = [];
+  let i = 0, j = 0;
+  while (i < owes.length && j < owed.length) {
+    const x = Math.min(owes[i].net, owed[j].net);
+    out.push({ from: owes[i].name, to: owed[j].name, amt: x });
+    owes[i].net -= x; owed[j].net -= x;
+    if (owes[i].net < 0.005) i++;
+    if (owed[j].net < 0.005) j++;
+  }
+  return out;
+}
+async function refreshExpenses() {
+  const body = $("x-body");
+  if (!body || !state.trip) return;
+  const [expRes, memRes] = await Promise.all([
+    sb.from("trip_expenses").select("*").eq("trip_id", state.trip.id).order("created_at"),
+    sb.rpc("jj_trip_members", { t: state.trip.id }),
+  ]);
+  if (expRes.error || memRes.error || !Array.isArray(memRes.data)) { body.textContent = "Couldn't load expenses."; return; }
+  const members = memRes.data, exps = expRes.data || [];
+  const meId = state.user && state.user.id;
+  const iOwn = state.trip.owner_id === meId;
+  const nameOf = {};
+  for (const m of members) nameOf[m.user_id] = m.name;
+  // everyone splits equally: current members plus anyone who paid and later left
+  const ids = [...new Set([...members.map(m => m.user_id), ...exps.map(e => e.paid_by)])];
+  const total = exps.reduce((a, e) => a + Number(e.amount), 0);
+  const each = ids.length ? total / ids.length : 0;
+  const paidBy = {};
+  for (const e of exps) paidBy[e.paid_by] = (paidBy[e.paid_by] || 0) + Number(e.amount);
+  const transfers = settleUp(ids.map(id => ({ id, name: nameOf[id] || "Former member", net: (paidBy[id] || 0) - each })));
+
+  const rows = exps.map(e => {
+    const canDelete = iOwn || e.created_by === meId || e.paid_by === meId;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 2px;border-bottom:1px solid var(--line)">
+      <span style="color:var(--ink)">${esc(e.description)}</span>
+      <span style="white-space:nowrap">· ${esc(nameOf[e.paid_by] || "Former member")} paid <b>${money(Number(e.amount))}</b></span>
+      ${canDelete ? `<button class="icon-btn x-del" data-id="${esc(e.id)}" title="Delete" style="margin-left:auto">🗑️</button>` : ""}
+    </div>`;
+  }).join("");
+
+  body.innerHTML = `
+    ${exps.length ? rows : `<div style="padding:6px 0 2px">Nothing logged yet — add what people paid for and settle up at the end of the trip.</div>`}
+    ${exps.length ? `<div style="display:flex;justify-content:space-between;padding:9px 2px;font-weight:700;color:var(--ink)">
+      <span>Total</span><span>${money(total)} · ${money(each)} each (${ids.length})</span></div>` : ""}
+    ${exps.length ? `<div style="font-weight:700;font-size:14px;margin:10px 0 4px;color:var(--ink)">🤝 Settle up</div>
+      ${transfers.length
+        ? transfers.map(t => `<div style="padding:3px 2px">${esc(t.from)} pays <b>${esc(t.to)}</b> ${money(t.amt)}</div>`).join("")
+        : `<div style="padding:3px 2px">All square 🎉</div>`}` : ""}
+    <div style="font-weight:700;font-size:14px;margin:14px 0 6px;color:var(--ink)">Add an expense</div>
+    <div class="field"><input id="x-desc" placeholder="e.g. Dinner, taxi, museum tickets"></div>
+    <div class="field-row">
+      <div class="field"><input id="x-amt" type="number" min="0" step="0.01" placeholder="Amount (${(state.trip && state.trip.currency) || "USD"})"></div>
+      <div class="field"><select id="x-payer">${members.map(m => `<option value="${esc(m.user_id)}" ${m.user_id === meId ? "selected" : ""}>${esc(m.name)}${m.user_id === meId ? " (you)" : ""} paid</option>`).join("")}</select></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Close</button>
+      <button class="btn primary" id="x-add">Add expense</button>
+    </div>`;
+
+  for (const btn of body.querySelectorAll(".x-del")) {
+    btn.onclick = async () => {
+      await sb.from("trip_expenses").delete().eq("id", btn.dataset.id);
+      refreshExpenses();
+    };
+  }
+  $("x-add").onclick = async () => {
+    const description = $("x-desc").value.trim();
+    const amount = parseFloat($("x-amt").value);
+    if (!description) { toast("What was it for?"); return; }
+    if (!amount || amount <= 0) { toast("Enter the amount paid"); return; }
+    const { error } = await sb.from("trip_expenses").insert({
+      trip_id: state.trip.id, description, amount, paid_by: $("x-payer").value,
+    });
+    if (error) { toast("Couldn't save the expense"); console.error(error); return; }
+    refreshExpenses();
+  };
+}
+
 /* ---------- travel times between stops (Geoapify routing) ---------- */
 const DWELL_MIN = { sight: 90, food: 75, activity: 120, transit: 30, lodging: 0, other: 60 };
 const travelCache = {}; // route key -> {legs, totalMin} | "pending" | "none"
@@ -2654,7 +2748,7 @@ function showAuth() {
   $("user-chip").style.display = "none";
   $("signout-btn").style.display = "none";
   $("header-trip-info").style.display = "none";
-  for (const b of ["share-btn", "refresh-btn", "back-btn", "edit-trip-btn"]) $(b).style.display = "none";
+  for (const b of ["share-btn", "refresh-btn", "back-btn", "edit-trip-btn", "expenses-btn"]) $(b).style.display = "none";
   $("auth-step-email").style.display = "";
   $("auth-step-code").style.display = "none";
   $("auth-note").textContent = "";

@@ -55,7 +55,7 @@ Prioritized after talking through where the app goes next (August 2026):
 3. **Today view (during-trip mode)** — ✅ built 8 Aug 2026. When today falls inside the trip dates: "Up next" hero with Directions (Apple Maps hand-off) and one-tap check-off, TODAY chip + auto-scroll to today's plan, tap the stop number to mark visited (syncs live to the crew, `visited_at/visited_by` on trip_stops), per-day weather icons via Open-Meteo (keyless, 16-day window).
 4. **Planning quality** — travel times ✅ built 8 Aug 2026 (Geoapify-routed legs between stops, walk/drive by hop length, day-load estimate in headers, overpacked warnings past ~10h). Still open: opening hours on suggestions and in the auto-scheduler; morning/afternoon/evening slots within days.
 5. **Richer collaboration** — comments on stops, date polling before a trip exists ("when can everyone go?"), task assignments ("Leslie books the restaurant"), notes/links/photos per stop.
-6. **Expense splitting** — scoped tight: log who paid, show who owes whom at the end. Nothing more.
+6. **Expense splitting** — ✅ built 8 Aug 2026, scoped tight as planned: 💸 Split in the trip header logs who paid what (equal split across the crew), shows total and per-head, and computes minimal settle-up transfers; realtime-synced `trip_expenses` table, delete by expense creator/payer/owner.
 
 ## Name decision — RESOLVED 7 Aug 2026
 
