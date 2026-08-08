@@ -322,6 +322,11 @@ header {
 .stop-card.visited { opacity: .55; }
 .stop-card.visited .stop-name { text-decoration: line-through; text-decoration-thickness: 1.5px; }
 .stop-num.checkable { cursor: pointer; }
+.leg-row { margin: 2px 0 2px 46px; font-size: 12px; color: var(--ink-soft); padding-left: 10px; border-left: 2px dotted var(--ink-soft); opacity: .85; }
+.day-load { margin-left: 8px; font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+.day-load.tight { color: #c0392b; font-weight: 700; }
+.day-warn { background: #fdf1e3; color: #a35a00; border: 1px solid #edcfa3; border-radius: 10px; padding: 7px 11px; font-size: 12.5px; margin: 8px 0 4px; }
+body.dark .day-warn { background: #3a2c18; color: #f0c896; border-color: #6b4e1f; }
 .stop-num.checked { background: #3f9d64 !important; }
 .stop-card {
   display: flex;
@@ -2259,14 +2264,23 @@ function renderItinerary() {
     }
     if (d > 0) tripTotal += dayTotal;
     if (dayTotal > 0) anyCost = true;
+    const travel = d > 0 ? dayTravel(d) : null;
+    const routable = d > 0 ? routableStops(d) : [];
+    const dwellMin = d > 0 ? stops.reduce((a, s2) => a + (DWELL_MIN[s2.category] != null ? DWELL_MIN[s2.category] : 60), 0) : 0;
+    const loadMin = dwellMin + (travel ? travel.totalMin : 0);
+    const loadStr = d > 0 && travel && loadMin >= 120
+      ? `<span class="day-load ${loadMin > 600 ? "tight" : ""}" title="Estimated time at stops plus travel">≈ ${fmtMin(loadMin)}</span>` : "";
     section.innerHTML = `
       <div class="day-header">
         <span class="day-title">${title}</span>${d === todayIdx ? '<span class="today-chip">TODAY</span>' : ""}
         <span class="day-date">${esc(date)}${(() => { const w = d > 0 && state.weather && state.weather[dayISO(state.trip, d)]; return w ? `<span class="day-wx">${w.emoji} ${w.max}°</span>` : ""; })()}</span>
-        <span class="day-count">${dayTotal > 0 ? `<span class="day-total">${money(dayTotal)}</span> · ` : ""}${stops.length ? stops.length + " stop" + (stops.length > 1 ? "s" : "") : ""}</span>
+        <span class="day-count">${dayTotal > 0 ? `<span class="day-total">${money(dayTotal)}</span> · ` : ""}${stops.length ? stops.length + " stop" + (stops.length > 1 ? "s" : "") : ""}${loadStr}</span>
       </div>`;
     if (!stops.length) {
       section.innerHTML += `<div class="empty-day">Nothing planned — search a place, click the map, or drag a stop here.</div>`;
+    }
+    if (travel && loadMin > 600) {
+      section.innerHTML += `<div class="day-warn">⚠️ Roughly ${fmtMin(loadMin)} of stops and travel — more than fits a comfortable day. Maybe move something to another day?</div>`;
     }
     section.addEventListener("dragover", (e) => sectionDragOver(e, section));
     section.addEventListener("drop", (e) => sectionDrop(e, d));
@@ -2321,6 +2335,16 @@ function renderItinerary() {
       const numEl = card.querySelector(".stop-num");
       if (d > 0) numEl.onclick = () => toggleVisited(s);
       card.querySelector(".day-select").onchange = (e) => setStopDay(s, parseInt(e.target.value, 10));
+      if (travel) {
+        const ri = routable.indexOf(s);
+        if (ri > 0 && travel.legs[ri - 1]) {
+          const L = travel.legs[ri - 1];
+          const legEl = document.createElement("div");
+          legEl.className = "leg-row";
+          legEl.textContent = `${L.mode === "walk" ? "🚶" : "🚗"} ${fmtMin(L.min)} · ${L.km} km`;
+          section.appendChild(legEl);
+        }
+      }
       section.appendChild(card);
     }
     // ongoing hotel stays: show on every day after check-in, through check-out
@@ -2350,6 +2374,47 @@ function renderItinerary() {
   footer.className = "itinerary-footer";
   footer.innerHTML = `<span style="font-size:12px;color:var(--ink-soft)">Tip: drag stops between days, or click the map to add one.</span>`;
   wrap.appendChild(footer);
+}
+
+/* ---------- travel times between stops (Geoapify routing) ---------- */
+const DWELL_MIN = { sight: 90, food: 75, activity: 120, transit: 30, lodging: 0, other: 60 };
+const travelCache = {}; // route key -> {legs, totalMin} | "pending" | "none"
+function fmtMin(m) {
+  const h = Math.floor(m / 60);
+  return h ? `${h}h${m % 60 ? " " + (m % 60) + "m" : ""}` : m + "m";
+}
+function haversineKm(a, b) {
+  const R = 6371, dLat = (b.lat - a.lat) * Math.PI / 180, dLng = (b.lng - a.lng) * Math.PI / 180;
+  const q = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(q));
+}
+function routableStops(d) {
+  return state.stops.filter(s => s.day_index === d && s.lat != null && s.category !== "lodging")
+    .sort((a, b) => a.order_index - b.order_index);
+}
+function dayTravel(d) {
+  const stops = routableStops(d);
+  if (stops.length < 2) return null;
+  let maxHop = 0;
+  for (let i = 1; i < stops.length; i++) maxHop = Math.max(maxHop, haversineKm(stops[i - 1], stops[i]));
+  const mode = maxHop > 2 ? "drive" : "walk";
+  const key = mode + ":" + stops.map(s => `${s.lat},${s.lng}`).join("|");
+  const hit = travelCache[key];
+  if (hit && hit !== "pending" && hit !== "none") return hit;
+  if (!hit && geoOn()) { travelCache[key] = "pending"; fetchDayTravel(key, stops, mode); }
+  return null;
+}
+async function fetchDayTravel(key, stops, mode) {
+  try {
+    const wp = stops.map(s => `${s.lat},${s.lng}`).join("|");
+    const r = await fetch(`https://api.geoapify.com/v1/routing?waypoints=${wp}&mode=${mode}&apiKey=${GEO_KEY}`);
+    const j = await r.json();
+    const props = j.features && j.features[0] && j.features[0].properties;
+    if (!props || !props.legs) { travelCache[key] = "none"; return; }
+    const legs = props.legs.map(L => ({ min: Math.max(1, Math.round(L.time / 60)), km: Math.round(L.distance / 100) / 10, mode }));
+    travelCache[key] = { legs, totalMin: legs.reduce((a, l) => a + l.min, 0) };
+    renderItinerary();
+  } catch (e) { travelCache[key] = "none"; /* stays quiet offline; retried next session */ }
 }
 
 /* ---------- during-trip actions ---------- */
