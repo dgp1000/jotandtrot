@@ -328,6 +328,8 @@ header {
 .day-warn { background: #fdf1e3; color: #a35a00; border: 1px solid #edcfa3; border-radius: 10px; padding: 7px 11px; font-size: 12.5px; margin: 8px 0 4px; }
 .closed-chip { background: #fdeaea !important; color: #a33333 !important; cursor: help; }
 .slot-header { margin: 10px 0 4px 6px; font-size: 11.5px; font-weight: 700; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .06em; }
+.stop-photos { display: flex; gap: 6px; margin-top: 7px; flex-wrap: wrap; }
+.stop-photos img { width: 54px; height: 54px; object-fit: cover; border-radius: 8px; cursor: pointer; background: var(--line); }
 body.dark .closed-chip { background: #4a2525 !important; color: #f0b6b6 !important; }
 body.dark .day-warn { background: #3a2c18; color: #f0c896; border-color: #6b4e1f; }
 .stop-num.checked { background: #3f9d64 !important; }
@@ -553,6 +555,7 @@ body.dark .day-warn { background: #3a2c18; color: #f0c896; border-color: #6b4e1f
   <button class="btn subtle" id="edit-trip-btn" style="display:none" title="Edit name, destination, or dates">✏️ Edit</button>
   <button class="btn subtle" id="expenses-btn" style="display:none" title="Log who paid and settle up">💸 Split</button>
   <button class="btn subtle" id="tasks-btn" style="display:none" title="Who's booking what?">📋 Tasks</button>
+  <input type="file" id="photo-input" accept="image/*" style="display:none">
   <button class="btn subtle" id="share-btn" style="display:none">🔗 Share code</button>
   <button class="btn subtle" id="refresh-btn" style="display:none" title="Refresh from server">↻ Sync</button>
   <button class="btn subtle" id="back-btn" style="display:none">← All trips</button>
@@ -987,6 +990,7 @@ async function openTrip(id) {
     state.comments = cached.comments || [];
     state.dateOptions = cached.dateOptions || [];
     state.dateVotes = cached.dateVotes || [];
+    state.photos = cached.photos || [];
     state._fitted = false;
     showTripView();
     toast("📴 Offline — showing your saved copy of this trip");
@@ -1062,6 +1066,7 @@ function subscribeRealtime(tripId) {
       .on("postgres_changes", { event: "*", schema: "public", table: "trip_suggestions", filter: `trip_id=eq.${tripId}` }, onChange)
       .on("postgres_changes", { event: "*", schema: "public", table: "trip_expenses", filter: `trip_id=eq.${tripId}` }, () => { if ($("x-body")) refreshExpenses(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "trip_tasks", filter: `trip_id=eq.${tripId}` }, () => { if ($("t-body")) refreshTasks(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_photos", filter: `trip_id=eq.${tripId}` }, onChange)
       .on("postgres_changes", { event: "*", schema: "public", table: "trip_date_options", filter: `trip_id=eq.${tripId}` }, onChange)
       .on("postgres_changes", { event: "*", schema: "public", table: "trip_date_votes", filter: `trip_id=eq.${tripId}` }, onChange)
       .on("postgres_changes", { event: "*", schema: "public", table: "trip_comments", filter: `trip_id=eq.${tripId}` }, async () => {
@@ -1080,13 +1085,14 @@ function unsubscribeRealtime() {
 
 async function reloadTripData() {
   const tripId = state.trip.id;
-  const [stopsRes, votesRes, suggRes, cmtRes, dopRes, dovRes] = await Promise.all([
+  const [stopsRes, votesRes, suggRes, cmtRes, dopRes, dovRes, phRes] = await Promise.all([
     sb.from("trip_stops").select("*").eq("trip_id", tripId).order("day_index").order("order_index"),
     sb.from("trip_votes").select("*, trip_stops!inner(trip_id)").eq("trip_stops.trip_id", tripId),
     sb.from("trip_suggestions").select("*").eq("trip_id", tripId).order("created_at", { ascending: false }),
     sb.from("trip_comments").select("*").eq("trip_id", tripId).order("created_at"),
     sb.from("trip_date_options").select("*").eq("trip_id", tripId).order("start_date"),
     sb.from("trip_date_votes").select("*").eq("trip_id", tripId),
+    sb.from("trip_photos").select("*").eq("trip_id", tripId).order("created_at"),
   ]);
   if (stopsRes.error) {
     // network trouble mid-trip: show the saved copy rather than a blank screen
@@ -1105,7 +1111,9 @@ async function reloadTripData() {
   state.comments = cmtRes && cmtRes.data || [];
   state.dateOptions = dopRes && dopRes.data || [];
   state.dateVotes = dovRes && dovRes.data || [];
-  writeCache("trip:" + tripId, { trip: state.trip, stops: state.stops, votes: state.votes, suggestions: state.suggestions, comments: state.comments, dateOptions: state.dateOptions, dateVotes: state.dateVotes, savedAt: Date.now() });
+  state.photos = phRes && phRes.data || [];
+  ensurePhotoUrls();
+  writeCache("trip:" + tripId, { trip: state.trip, stops: state.stops, votes: state.votes, suggestions: state.suggestions, comments: state.comments, dateOptions: state.dateOptions, dateVotes: state.dateVotes, photos: state.photos, savedAt: Date.now() });
   renderItinerary();
   renderSuggestions();
   renderMarkers();
@@ -2379,10 +2387,12 @@ function renderItinerary() {
           <div class="stop-name">${cat.emoji} ${esc(s.name)}${newChip}${costChip}${stayChip}${closedChip}</div>
           ${s.address ? `<div class="stop-addr">${esc(s.address)}</div>` : ""}
           ${s.notes ? `<div class="stop-notes">${linkify(esc(s.notes))}</div>` : ""}
+          ${stopPhotos(s.id).length ? `<div class="stop-photos">${stopPhotos(s.id).map(p => `<img data-ph="${esc(p.id)}" src="${photoUrlCache[p.path] || ""}" alt="photo" loading="lazy">`).join("")}</div>` : ""}
           <div class="stop-actions">
             <button class="icon-btn vote-up ${vs.mine === 1 ? "voted" : ""}" title="Vote up">👍 ${vs.up || ""}</button>
             <button class="icon-btn vote-down ${vs.mine === -1 ? "voted" : ""}" title="Vote down">👎 ${vs.down || ""}</button>
             <button class="icon-btn cmt-btn" title="Comments">💬 ${stopComments(s.id).length || ""}</button>
+            <button class="icon-btn photo-btn" title="Add a photo">📷${stopPhotos(s.id).length ? " " + stopPhotos(s.id).length : ""}</button>
             <button class="icon-btn mv-up" title="Move up">↑</button>
             <button class="icon-btn mv-down" title="Move down">↓</button>
             ${d > 0 ? `<button class="icon-btn slot-btn" title="Time of day: ${s.slot ? SLOT_META[s.slot].label.toLowerCase() : "anytime"} — tap to change">${s.slot && SLOT_META[s.slot] ? SLOT_META[s.slot].emoji : "🕒"}</button>` : ""}
@@ -2402,6 +2412,10 @@ function renderItinerary() {
       card.querySelector(".vote-up").onclick = () => castVote(s.id, 1);
       card.querySelector(".vote-down").onclick = () => castVote(s.id, -1);
       card.querySelector(".cmt-btn").onclick = () => showCommentsModal(s);
+      card.querySelector(".photo-btn").onclick = () => { photoTargetStop = s; $("photo-input").click(); };
+      for (const im of card.querySelectorAll(".stop-photos img")) {
+        im.onclick = (ev) => { ev.stopPropagation(); const ph = (state.photos || []).find(x => x.id === im.dataset.ph); if (ph) showPhoto(ph); };
+      }
       card.querySelector(".mv-up").onclick = () => moveStop(s, -1);
       card.querySelector(".mv-down").onclick = () => moveStop(s, 1);
       card.querySelector(".edit-btn").onclick = () => openStopForm(null, s);
@@ -2459,6 +2473,73 @@ function renderItinerary() {
   footer.innerHTML = `<span style="font-size:12px;color:var(--ink-soft)">Tip: drag stops between days, or click the map to add one.</span>`;
   wrap.appendChild(footer);
 }
+
+/* ---------- photos per stop ---------- */
+let photoUrlCache = {};   // storage path -> signed url (per session)
+let photoTargetStop = null;
+function stopPhotos(stopId) { return (state.photos || []).filter(p => p.stop_id === stopId); }
+async function ensurePhotoUrls() {
+  const missing = (state.photos || []).map(p => p.path).filter(path => !photoUrlCache[path]);
+  if (!missing.length) return;
+  try {
+    const { data, error } = await sb.storage.from("stop-photos").createSignedUrls(missing, 3600);
+    if (error || !data) return;
+    let got = false;
+    for (const d of data) if (d.signedUrl && d.path) { photoUrlCache[d.path] = d.signedUrl; got = true; }
+    if (got) renderItinerary();
+  } catch (e) {}
+}
+async function shrinkImage(file, maxDim = 1600, quality = 0.82) {
+  try {
+    const img = await createImageBitmap(file);
+    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+    const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+    const blob = await new Promise(r => canvas.toBlob(r, "image/jpeg", quality));
+    return blob || file;
+  } catch (e) { return file; } // undecodable format — upload as-is
+}
+async function addStopPhoto(s, file) {
+  if (!file) return;
+  toast("📷 Uploading…");
+  const blob = await shrinkImage(file);
+  const path = `${state.trip.id}/${s.id}/${(crypto.randomUUID ? crypto.randomUUID() : Date.now() + "-" + Math.random().toString(36).slice(2))}.jpg`;
+  const { error } = await sb.storage.from("stop-photos").upload(path, blob, { contentType: "image/jpeg" });
+  if (error) { toast("Upload didn't work — try again"); console.error(error); return; }
+  const { error: e2 } = await sb.from("trip_photos").insert({
+    trip_id: state.trip.id, stop_id: s.id, path, author_name: state.voterName || "",
+  });
+  if (e2) { toast("Upload didn't work — try again"); console.error(e2); return; }
+  toast("Photo added 📷");
+  await reloadTripData();
+}
+function showPhoto(p) {
+  const url = photoUrlCache[p.path];
+  if (!url) return;
+  const meId = state.user && state.user.id;
+  const canDelete = p.created_by === meId || (state.trip && state.trip.owner_id === meId);
+  openModal(`
+    <img src="${url}" style="max-width:100%;max-height:60vh;border-radius:12px;display:block;margin:0 auto">
+    <div style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:var(--ink-soft)">
+      <span>📷 ${esc(p.author_name || "someone")} · ${esc(new Date(p.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" }))}</span>
+      ${canDelete ? `<button class="btn subtle" id="ph-del" style="margin-left:auto;color:#c0392b">🗑️ Delete</button>` : ""}
+    </div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal()">Close</button></div>`);
+  const del = $("ph-del");
+  if (del) del.onclick = async () => {
+    await sb.from("trip_photos").delete().eq("id", p.id);
+    try { await sb.storage.from("stop-photos").remove([p.path]); } catch (e) {}
+    closeModal();
+    await reloadTripData();
+  };
+}
+$("photo-input").addEventListener("change", (e) => {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = "";
+  if (f && photoTargetStop) addStopPhoto(photoTargetStop, f);
+});
 
 /* ---------- task assignments: who's booking what ---------- */
 function showTasksModal() {
