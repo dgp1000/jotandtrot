@@ -52,15 +52,17 @@
     <button class="copy" id="copy">Copy code</button>
     <ol class="steps">
       <li><strong>Have the app?</strong> Open this link on your iPhone and the trip will join automatically.</li>
-      <li><strong>Otherwise:</strong> get Jot &amp; Trot below, sign in, and paste the code under "Have a share code?"</li>
+      <li><strong>No app?</strong> Hit "Plan in your browser" — sign in and you'll join the trip automatically.</li>
     </ol>
-    <a class="btn" href="mailto:hello@jotandtrot.com?subject=Jot%20%26%20Trot%20beta">Get the app (beta)</a>
+    <a class="btn" id="webapp-btn" href="https://app.jotandtrot.com">Plan in your browser</a>
+    <p class="fine">Want it on your iPhone? <a href="mailto:hello@jotandtrot.com?subject=Jot%20%26%20Trot%20beta">Request a TestFlight invite</a>.</p>
     <p class="fine">Jot &amp; Trot is a collaborative trip planner — scout ideas on a live map, vote with your crew, and auto-build your days. <a href="/">Learn more</a></p>
   </div>
 <script>
   const m = location.pathname.match(/^\/join\/([A-Za-z0-9-]+)\/?$/);
   const code = m ? m[1].toLowerCase() : null;
   document.getElementById("code").textContent = code || "(no code in link)";
+  if (code) document.getElementById("webapp-btn").href = "https://app.jotandtrot.com/join/" + code;
   document.getElementById("copy").onclick = async () => {
     if (!code) return;
     try { await navigator.clipboard.writeText(code); document.getElementById("copy").textContent = "Copied ✓"; } catch (e) {}

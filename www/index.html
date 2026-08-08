@@ -1178,7 +1178,11 @@ async function flushPendingJoin() {
 }
 (async () => {
   const C = window.Capacitor;
-  if (!C || !C.isNativePlatform || !C.isNativePlatform()) return;
+  if (!C || !C.isNativePlatform || !C.isNativePlatform()) {
+    // web: the app itself may be served at /join/CODE (app.jotandtrot.com)
+    if (captureJoinUrl(location.href)) history.replaceState({}, "", "/");
+    return;
+  }
   try {
     const Link = (C.Plugins && C.Plugins.Link) || (typeof C.registerPlugin === "function" && C.registerPlugin("Link"));
     if (!Link) return;
