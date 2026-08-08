@@ -326,6 +326,8 @@ header {
 .day-load { margin-left: 8px; font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
 .day-load.tight { color: #c0392b; font-weight: 700; }
 .day-warn { background: #fdf1e3; color: #a35a00; border: 1px solid #edcfa3; border-radius: 10px; padding: 7px 11px; font-size: 12.5px; margin: 8px 0 4px; }
+.closed-chip { background: #fdeaea !important; color: #a33333 !important; cursor: help; }
+body.dark .closed-chip { background: #4a2525 !important; color: #f0b6b6 !important; }
 body.dark .day-warn { background: #3a2c18; color: #f0c896; border-color: #6b4e1f; }
 .stop-num.checked { background: #3f9d64 !important; }
 .stop-card {
@@ -1628,6 +1630,7 @@ async function geoapifyScout(grp, lat, lng, radius, seen, area, tripId, signal) 
       trip_id: tripId, kind, name: String(name).slice(0, 120),
       description: desc + " (found nearby on the map)",
       area, est_cost: null, cost_note: null,
+      hours: p.opening_hours || raw.opening_hours || null,
       lat: p.lat, lng: p.lon,
       address: p.address_line2 || p.formatted || null,
       _score: score,
@@ -1781,13 +1784,14 @@ function classifyElements(els, caps, seen, area, tripId) {
     seen.add(name.toLowerCase());
 
     if (t.fee === "no") { cost = 0; costNote = "free entry"; }
-    if (t["opening_hours"] && kind !== "lodging") desc.push("see hours locally");
+
     const notable = ("wikipedia" in t || "wikidata" in t ? 3 : 0) + (t.website || t["contact:website"] ? 1 : 0) + (t.stars ? 1 : 0);
 
     buckets[kind].push({
       trip_id: tripId, kind, name: name.slice(0, 120),
       description: desc.join(" · ") + " (found nearby on the map)",
       area, est_cost: cost, cost_note: costNote,
+      hours: t["opening_hours"] || null,
       lat: plat, lng: plng,
       address: t["addr:street"] ? `${t["addr:housenumber"] || ""} ${t["addr:street"]}`.trim() + (t["addr:city"] ? ", " + t["addr:city"] : "") : null,
       _score: notable,
@@ -1838,6 +1842,7 @@ function suggCard(g, isAdded = false) {
       <span class="sugg-cost">${suggCostLabel(g)}</span>
     </div>
     ${g.area ? `<div class="sugg-area">${esc(g.area)}</div>` : ""}
+    ${g.hours ? `<div class="sugg-area" title="${esc(g.hours)}">🕐 ${esc(g.hours.length > 44 ? g.hours.slice(0, 44) + "…" : g.hours)}</div>` : ""}
     ${g.description ? `<div class="sugg-desc">${esc(g.description)}</div>` : ""}
     ${isAdded ? "" : `<div class="sugg-actions">
       <button class="btn primary sugg-add">＋ Add to trip</button>
@@ -1847,6 +1852,7 @@ function suggCard(g, isAdded = false) {
     card.querySelector(".sugg-add").onclick = () => {
       openStopForm({
         name: g.name, lat: g.lat, lng: g.lng, address: g.address || g.area || "",
+        hours: g.hours || null,
         category: CATEGORIES[g.kind] ? g.kind : "other",
         cost: g.est_cost, notes: g.description ? g.description.slice(0, 140) : null,
         onSaved: async () => {
@@ -2078,6 +2084,7 @@ function openStopForm(pre, existing = null) {
         trip_id: state.trip.id,
         lat: pre.lat, lng: pre.lng,
         address: pre.address || null,
+        hours: pre.hours || null,
         order_index: state.stops.filter(s => s.day_index === dayIndex).length,
       };
       const { error } = await sb.from("trip_stops").insert(row);
@@ -2306,10 +2313,14 @@ function renderItinerary() {
         ? `<span class="cost-chip">${nights ? `${money(s.cost)}/night · ${nights} night${nights > 1 ? "s" : ""}` : money(s.cost)}</span>` : "";
       const stayChip = nights ? `<span class="cost-chip stay-thru-chip" style="background:#eef4f4">🛏️ thru Day ${Math.max(s.end_day || s.day_index + 1, s.day_index + 1)}</span>` : "";
       const newChip = state.freshStopIds && state.freshStopIds.has(s.id) ? `<span class="new-chip">NEW</span>` : "";
+      const wdNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+      const closedChip = d > 0 && s.hours && closedOnDay(s.hours, state.trip, d)
+        ? `<span class="cost-chip closed-chip" title="${esc(s.hours)}">⚠️ may be closed ${wdNames[stopWeekday(state.trip, d)]}</span>`
+        : s.hours ? `<span class="cost-chip" style="background:#eef4f4;cursor:help" title="${esc(s.hours)}">🕐</span>` : "";
       card.innerHTML = `
         <div class="stop-num ${d > 0 ? "checkable" : ""} ${s.visited_at ? "checked" : ""}" title="${d > 0 ? (s.visited_at ? "Visited — tap to undo" : "Tap to mark visited") : ""}" style="background:${cat.color}">${s.visited_at ? "✓" : d === 0 ? "★" : num}</div>
         <div class="stop-body">
-          <div class="stop-name">${cat.emoji} ${esc(s.name)}${newChip}${costChip}${stayChip}</div>
+          <div class="stop-name">${cat.emoji} ${esc(s.name)}${newChip}${costChip}${stayChip}${closedChip}</div>
           ${s.address ? `<div class="stop-addr">${esc(s.address)}</div>` : ""}
           ${s.notes ? `<div class="stop-notes">${esc(s.notes)}</div>` : ""}
           <div class="stop-actions">
@@ -2379,6 +2390,53 @@ function renderItinerary() {
   footer.className = "itinerary-footer";
   footer.innerHTML = `<span style="font-size:12px;color:var(--ink-soft)">Tip: drag stops between days, or click the map to add one.</span>`;
   wrap.appendChild(footer);
+}
+
+/* ---------- opening hours (best-effort OSM opening_hours subset) ---------- */
+const OH_DAYS = ["mo", "tu", "we", "th", "fr", "sa", "su"];
+function parseHoursWeekdays(str) {
+  // → array of 7 booleans (Mon..Sun) or null when we can't confidently parse
+  if (!str) return null;
+  const src = String(str).trim().toLowerCase();
+  if (src === "24/7") return [true, true, true, true, true, true, true];
+  const open = [false, false, false, false, false, false, false];
+  let recognized = false;
+  for (let rule of src.split(";")) {
+    rule = rule.trim();
+    if (!rule || /^ph\b/.test(rule)) continue; // skip public-holiday rules
+    const off = /\boff\b|\bclosed\b/.test(rule);
+    const m = rule.match(/^((?:(?:mo|tu|we|th|fr|sa|su)(?:\s*[-,]\s*(?:mo|tu|we|th|fr|sa|su))*)\s*)?(.*)$/);
+    const daysStr = (m[1] || "").trim();
+    const rest = (m[2] || "").trim();
+    let days = [];
+    if (!daysStr) {
+      if (/^\d{1,2}:\d{2}/.test(rest)) days = [0, 1, 2, 3, 4, 5, 6];
+      else return null; // months, sunrise/sunset, etc. — make no claims
+    } else {
+      for (const tok of daysStr.split(",")) {
+        const range = tok.trim().split("-").map(x => OH_DAYS.indexOf(x.trim()));
+        if (range.some(x => x < 0)) return null;
+        if (range.length === 2) { let i = range[0]; for (;;) { days.push(i); if (i === range[1]) break; i = (i + 1) % 7; } }
+        else days.push(range[0]);
+      }
+    }
+    if (!off && rest !== "" && !/^\d{1,2}:\d{2}/.test(rest)) return null;
+    recognized = true;
+    for (const di of days) open[di] = !off; // later rules override earlier ones, as in OSM
+  }
+  return recognized ? open : null;
+}
+function stopWeekday(trip, dayIndex) { // 0=Mon..6=Sun, -1 when trip is undated
+  if (!trip || !trip.start_date || dayIndex < 1) return -1;
+  const dt = new Date(trip.start_date + "T12:00:00");
+  dt.setDate(dt.getDate() + (dayIndex - 1));
+  return (dt.getDay() + 6) % 7;
+}
+function closedOnDay(hours, trip, dayIndex) {
+  const wd = stopWeekday(trip, dayIndex);
+  if (wd < 0) return false;
+  const open = parseHoursWeekdays(hours);
+  return open ? !open[wd] : false;
 }
 
 /* ---------- expense splitting: who paid, who owes whom ---------- */
@@ -2679,10 +2737,18 @@ async function runAutoPlan(live, ideas, dayCount) {
   const newRows = [], moves = [], suggIds = [];
   for (const it of ordered) {
     while (d < dayCount && load[d] >= cap) d++;
-    lastDay = d;
-    const orderIndex = load[d]++;
+    // avoid dropping a stop on a weekday its opening hours say it's closed
+    let target = d;
+    const hrs = it.sugg ? it.sugg.hours : it.stop ? it.stop.hours : null;
+    if (hrs && closedOnDay(hrs, state.trip, target)) {
+      for (let dd = 1; dd <= dayCount; dd++) {
+        if (dd !== target && load[dd] <= cap && !closedOnDay(hrs, state.trip, dd)) { target = dd; break; }
+      }
+    }
+    lastDay = Math.max(lastDay, target);
+    const orderIndex = load[target]++;
     if (it.stop) {
-      const mv = { id: it.stop.id, day_index: d, order_index: orderIndex };
+      const mv = { id: it.stop.id, day_index: target, order_index: orderIndex };
       if (it.kind === "lodging") mv.end_day = dayCount; // your own hotel idea: stay through the last day
       moves.push(mv);
     } else {
@@ -2694,9 +2760,10 @@ async function runAutoPlan(live, ideas, dayCount) {
       newRows.push({
         trip_id: state.trip.id, name: g.name,
         category: CATEGORIES[g.kind] ? g.kind : "other",
-        day_index: d, order_index: orderIndex,
+        day_index: target, order_index: orderIndex,
         lat: g.lat, lng: g.lng,
         address: g.address || g.area || null,
+        hours: g.hours || null,
         cost: g.est_cost,
         notes: noteBits.join(" · ").slice(0, 140) || null,
       });
