@@ -68,11 +68,15 @@ travel,itinerary,group,friends,vacation,holiday,map,planner,expenses,split,journ
 
 Upload order tells the story: plan → today → map → dark → (iPad).
 
-6.9" iPhone (1290×2796):
-1. `as2-plan-today.png` — Today view hero, weather, travel times
-2. `as3-plan-days.png` — day-by-day plan, budgets, walking legs
-3. `as1-map.png` — map with numbered stops and route
-4. `as4-map-dark.png` — night mode
+6.5" iPhone (1284×2778) — the size App Store Connect asks for; use the `as65-*` files:
+1. `as65-2-plan-today.png` — Today view hero, weather, travel times
+2. `as65-3-plan-days.png` — day-by-day plan, budgets, walking legs
+3. `as65-1-map.png` — map with numbered stops and route
+4. `as65-4-map-dark.png` — night mode
+
+(6.9"-class versions at 1290×2796 — the `as1..as4` files — kept in case a
+6.9" slot appears under "View All Sizes"; regenerate any size with
+`SIZE=65 node appstore-shots.js` / `node appstore-shots.js`.)
 
 13" iPad (2064×2752):
 5. `as-ipad1.png` — wide layout, plan + map side by side

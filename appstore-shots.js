@@ -27,8 +27,10 @@ function curlFetch(request) {
 }
 
 async function phonePage(browser, dark) {
+  // default 6.9" (430×932@3 = 1290×2796); SIZE=65 → 6.5" (428×926@3 = 1284×2778)
+  const vp = process.env.SIZE === '65' ? { width: 428, height: 926 } : { width: 430, height: 932 };
   const context = await browser.newContext({
-    viewport: { width: 430, height: 932 }, isMobile: true, hasTouch: true,
+    viewport: vp, isMobile: true, hasTouch: true,
     deviceScaleFactor: 3, colorScheme: dark ? 'dark' : 'light',
   });
   const handler = async route => { try { await route.fulfill(curlFetch(route.request())); } catch (e) { try { await route.abort(); } catch (e2) {} } };
@@ -95,16 +97,16 @@ const fitLisbon = () => {
   await p.waitForTimeout(4000);
   await p.evaluate(fitLisbon);
   await p.waitForTimeout(20000);
-  await p.screenshot({ path: '/tmp/as1-map.png' });
+  await p.screenshot({ path: (process.env.SIZE==='65'?'/tmp/as65-1-map.png':'/tmp/as1-map.png') });
 
   await p.tap('#mn-plan');
   await p.waitForTimeout(4000);  // travel legs + weather land async
-  await p.screenshot({ path: '/tmp/as2-plan-today.png' });
+  await p.screenshot({ path: (process.env.SIZE==='65'?'/tmp/as65-2-plan-today.png':'/tmp/as2-plan-today.png') });
 
   // scroll past the today hero to show day sections with travel legs
   await p.evaluate(() => { const el = document.querySelector('.day-section[data-day="2"]'); if (el) el.scrollIntoView({ block: 'start' }); });
   await p.waitForTimeout(800);
-  await p.screenshot({ path: '/tmp/as3-plan-days.png' });
+  await p.screenshot({ path: (process.env.SIZE==='65'?'/tmp/as65-3-plan-days.png':'/tmp/as3-plan-days.png') });
   await p.context().close();
 
   // ----- dark mode: map -----
@@ -113,7 +115,7 @@ const fitLisbon = () => {
   await p.waitForTimeout(4000);
   await p.evaluate(fitLisbon);
   await p.waitForTimeout(20000);
-  await p.screenshot({ path: '/tmp/as4-map-dark.png' });
+  await p.screenshot({ path: (process.env.SIZE==='65'?'/tmp/as65-4-map-dark.png':'/tmp/as4-map-dark.png') });
   await p.context().close();
 
   console.log('app store shots done');
