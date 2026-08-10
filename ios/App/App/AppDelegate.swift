@@ -1,13 +1,25 @@
 import UIKit
 import Capacitor
 import UserNotifications
+import Sentry
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
 
+    /// Set to a Sentry DSN to enable native crash reporting; empty = off.
+    /// Keep in sync with SENTRY_DSN in app.template.html (same Sentry project).
+    static let sentryDSN = ""
+
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        if !AppDelegate.sentryDSN.isEmpty {
+            SentrySDK.start { options in
+                options.dsn = AppDelegate.sentryDSN
+                options.sendDefaultPii = false
+                options.tracesSampleRate = 0
+            }
+        }
         UNUserNotificationCenter.current().delegate = self
         return true
     }

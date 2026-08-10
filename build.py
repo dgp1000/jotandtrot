@@ -3,7 +3,8 @@
 tpl = open("app.template.html").read()
 for marker, path in [("/*__LEAFLET_CSS__*/", "lib/leaflet.min.css"),
                      ("/*__LEAFLET_JS__*/", "lib/leaflet.min.js"),
-                     ("/*__SUPABASE_JS__*/", "lib/supabase.min.js")]:
+                     ("/*__SUPABASE_JS__*/", "lib/supabase.min.js"),
+                     ("/*__SENTRY_JS__*/", "lib/sentry.min.js")]:
     assert marker in tpl, f"missing marker {marker}"
     tpl = tpl.replace(marker, open(path).read())
 open("jotandtrot.html", "w").write(tpl)

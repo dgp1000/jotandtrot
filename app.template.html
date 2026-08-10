@@ -632,6 +632,22 @@ body.dark .day-warn { background: #3a2c18; color: #f0c896; border-color: #6b4e1f
   <button id="mn-plan"><span class="mn-emoji">🗓️</span>Plan</button>
 </nav>
 
+<script id="sentry-js">/*__SENTRY_JS__*/</script>
+<script>
+/* crash & error reporting — first script so startup errors are caught too */
+const SENTRY_DSN = ""; // set to a Sentry DSN to enable; empty = reporting off
+if (SENTRY_DSN && window.Sentry) {
+  const nativeShell = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    release: "jotandtrot@1.0",
+    environment: nativeShell ? "ios-webview" : "web",
+    // errors only — no performance tracing, no session replay, no PII
+    sendDefaultPii: false,
+    tracesSampleRate: 0,
+  });
+}
+</script>
 <script id="leaflet-js">/*__LEAFLET_JS__*/</script>
 <script id="supabase-js">/*__SUPABASE_JS__*/</script>
 <script>
