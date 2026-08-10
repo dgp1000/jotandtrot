@@ -137,6 +137,9 @@ header {
 .home-hero { margin-bottom: 28px; }
 .home-hero h1 { font-size: 30px; letter-spacing: -0.03em; margin-bottom: 6px; }
 .home-hero p { color: var(--ink-soft); font-size: 15px; }
+.home-foot { text-align: center; margin-top: 28px; }
+.home-foot a { color: var(--ink-soft); font-size: 12.5px; text-decoration: none; }
+.home-foot a:hover { color: var(--teal); text-decoration: underline; }
 .trip-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
@@ -566,6 +569,7 @@ body.dark .day-warn { background: #3a2c18; color: #f0c896; border-color: #6b4e1f
   <button class="btn subtle" id="edit-trip-btn" style="display:none" title="Edit name, destination, or dates">✏️ Edit</button>
   <button class="btn subtle" id="expenses-btn" style="display:none" title="Log who paid and settle up">💸 Split</button>
   <button class="btn subtle" id="tasks-btn" style="display:none" title="Who's booking what?">📋 Tasks</button>
+  <button class="btn subtle" id="calendar-btn" style="display:none" title="Put the schedule on your calendar">📆 Calendar</button>
   <input type="file" id="photo-input" accept="image/*" style="display:none">
   <button class="btn subtle" id="share-btn" style="display:none">🔗 Share code</button>
   <button class="btn subtle" id="refresh-btn" style="display:none" title="Refresh from server">↻ Sync</button>
@@ -608,6 +612,9 @@ body.dark .day-warn { background: #3a2c18; color: #f0c896; border-color: #6b4e1f
       <span>Have a share code from a friend?</span>
       <input id="join-code" placeholder="e.g. 3fa9c21b04d2" maxlength="16">
       <button class="btn" id="join-btn">Open trip</button>
+    </div>
+    <div class="home-foot">
+      <a id="feedback-link" href="#">💬 Something broken or missing? Tell us</a>
     </div>
   </div>
 </div>
@@ -879,6 +886,7 @@ function showCreateTrip(existing = null) {
       <select id="m-currency">${Object.keys(CURRENCY_SYMBOLS).map(c => `<option ${c === "USD" ? "selected" : ""}>${c}</option>`).join("")}</select>
     </div>
     <div class="modal-actions">
+      ${existing ? `<button class="btn" id="m-clone" style="margin-right:auto" title="New trip with the same stops and days — no votes, photos, or history">⧉ Duplicate</button>` : ""}
       <button class="btn" onclick="closeModal()">Cancel</button>
       <button class="btn primary" id="m-create">${existing ? "Save changes" : "Create trip"}</button>
     </div>`);
@@ -888,6 +896,7 @@ function showCreateTrip(existing = null) {
     $("m-start").value = existing.start_date || "";
     $("m-end").value = existing.end_date || "";
     $("m-currency").value = existing.currency || "USD";
+    $("m-clone").onclick = () => cloneTrip(existing);
   }
   $("m-name").focus();
 
@@ -982,6 +991,38 @@ function showCreateTrip(existing = null) {
     await loadTrips();
     openTrip(data.id);
   };
+}
+
+/* duplicate a trip: same plan, fresh history — the copy is yours, undated */
+async function cloneTrip(t) {
+  toast("Duplicating…");
+  const row = { ...t };
+  for (const k of ["id", "created_at", "updated_at", "share_code", "owner_id"]) delete row[k];
+  row.name = `${t.name} (copy)`;
+  row.start_date = null;
+  row.end_date = null;
+  row.owner_id = state.user.id;
+  const { data: nt, error } = await sb.from("trip_trips").insert(row).select().single();
+  if (error) { toast("Couldn't duplicate the trip"); console.error(error); return; }
+  let stops = (state.trip && state.trip.id === t.id) ? state.stops : null;
+  if (!stops) {
+    const r = await sb.from("trip_stops").select("*").eq("trip_id", t.id);
+    stops = r.data || [];
+  }
+  if (stops.length) {
+    const rows = stops.map(s => {
+      const c = { ...s };
+      for (const k of ["id", "created_at", "updated_at", "visited_at", "visited_by"]) delete c[k];
+      c.trip_id = nt.id;
+      return c;
+    });
+    const { error: e2 } = await sb.from("trip_stops").insert(rows);
+    if (e2) { toast("Trip copied, but its stops didn't make it"); console.error(e2); }
+  }
+  closeModal();
+  await loadTrips();
+  await openTrip(nt.id);
+  toast("⧉ Trip duplicated — set the new dates whenever");
 }
 
 /* ---------- data: current trip ---------- */
@@ -1179,6 +1220,7 @@ function showTripView() {
   $("edit-trip-btn").style.display = "";
   $("expenses-btn").style.display = "";
   $("tasks-btn").style.display = "";
+  $("calendar-btn").style.display = state.trip.start_date ? "" : "none";
   $("refresh-btn").style.display = "";
   initMap();
   setTab("itin");
@@ -1201,6 +1243,7 @@ function showHome() {
   $("edit-trip-btn").style.display = "none";
   $("expenses-btn").style.display = "none";
   $("tasks-btn").style.display = "none";
+  $("calendar-btn").style.display = "none";
   $("refresh-btn").style.display = "none";
   loadTrips();
 }
@@ -1209,6 +1252,68 @@ $("back-btn").onclick = showHome;
 $("edit-trip-btn").onclick = () => showCreateTrip(state.trip);
 $("expenses-btn").onclick = showExpensesModal;
 $("tasks-btn").onclick = showTasksModal;
+$("calendar-btn").onclick = exportCalendar;
+
+/* ---------- calendar export: schedule → Apple Calendar (native) or .ics (web) ---------- */
+const SLOT_HOURS = { morning: [9, 11], afternoon: [13, 15], evening: [19, 21] };
+function calendarEventsForTrip() {
+  const trip = state.trip, out = [];
+  const dayCount = tripDayCount(trip);
+  for (let d = 1; d <= dayCount; d++) {
+    const date = dayISO(trip, d);
+    if (!date) continue;
+    const stops = state.stops.filter(s => s.day_index === d && s.category !== "lodging").sort((a, b) => a.order_index - b.order_index);
+    for (const s of stops) {
+      const cat = CATEGORIES[s.category] || CATEGORIES.other;
+      const ev = { title: `${cat.emoji} ${s.name}`, date, notes: [trip.name, s.notes || ""].filter(Boolean).join(" — ") };
+      const hrs = s.slot && SLOT_HOURS[s.slot];
+      if (hrs) { ev.startHour = hrs[0]; ev.endHour = hrs[1]; }
+      out.push(ev);
+    }
+  }
+  for (const L of state.stops) {
+    if (L.category !== "lodging" || L.day_index < 1) continue;
+    const date = dayISO(trip, L.day_index);
+    const out2 = Math.max(L.end_day || L.day_index + 1, L.day_index + 1);
+    if (date) out.push({ title: `🛏️ ${L.name}`, date, days: out2 - L.day_index, notes: `${trip.name} — through ${dayDate(trip, out2)}` });
+  }
+  return out;
+}
+async function exportCalendar() {
+  const evs = calendarEventsForTrip();
+  if (!evs.length) { toast("Nothing scheduled yet — slot some stops into days first"); return; }
+  const C = window.Capacitor;
+  if (C && C.isNativePlatform && C.isNativePlatform()) {
+    try {
+      const res = await nativeCall("Calendar", "addEvents", { events: evs });
+      if (res && res.denied) { toast("Calendar access is off — enable it in Settings → Jot & Trot"); return; }
+      toast(`📆 Added ${(res && res.added) || 0} events to your calendar`);
+    } catch (e) { toast("This app build can't reach the calendar yet — update the app"); }
+    return;
+  }
+  const pad = n => String(n).padStart(2, "0");
+  const dstr = iso => iso.replace(/-/g, "");
+  const plusDays = (iso, n) => { const x = new Date(iso + "T12:00:00"); x.setDate(x.getDate() + n); return localISODate(x); };
+  const escTxt = t => t.replace(/([,;\\])/g, "\\$1").replace(/\n/g, "\\n");
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Jot & Trot//EN"];
+  evs.forEach((e, i) => {
+    lines.push("BEGIN:VEVENT",
+      `UID:jj-${state.trip.id}-${i}@jotandtrot.com`,
+      `DTSTAMP:${dstr(e.date)}T000000Z`,
+      e.startHour != null ? `DTSTART:${dstr(e.date)}T${pad(e.startHour)}0000` : `DTSTART;VALUE=DATE:${dstr(e.date)}`,
+      e.startHour != null ? `DTEND:${dstr(e.date)}T${pad(e.endHour)}0000` : `DTEND;VALUE=DATE:${dstr(plusDays(e.date, e.days || 1))}`,
+      `SUMMARY:${escTxt(e.title)}`,
+      e.notes ? `DESCRIPTION:${escTxt(e.notes)}` : "",
+      "END:VEVENT");
+  });
+  lines.push("END:VCALENDAR");
+  const blob = new Blob([lines.filter(Boolean).join("\r\n")], { type: "text/calendar" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${(state.trip.name || "trip").replace(/[^\w -]+/g, "").trim() || "trip"}.ics`;
+  document.body.appendChild(a); a.click(); a.remove();
+  toast("📆 Calendar file downloaded — open it to add the trip");
+}
 $("logo-btn").onclick = showHome;
 $("refresh-btn").onclick = async () => { await reloadTripData(); toast("Synced"); };
 $("share-btn").onclick = async () => {
@@ -3557,6 +3662,13 @@ $("auth-back").onclick = () => { $("auth-step-email").style.display = ""; $("aut
 $("auth-code").addEventListener("keydown", (e) => { if (e.key === "Enter") $("auth-verify").click(); });
 $("auth-email").addEventListener("keydown", (e) => { if (e.key === "Enter") $("auth-send").click(); });
 $("signout-btn").onclick = async () => { await sb.auth.signOut(); };
+$("feedback-link").onclick = (e) => {
+  e.preventDefault();
+  const C = window.Capacitor;
+  const plat = (C && C.isNativePlatform && C.isNativePlatform()) ? "iOS app" : "web";
+  const body = encodeURIComponent(`\n\n—\nJot & Trot ${plat} · ${navigator.userAgent}`);
+  location.href = `mailto:support@jotandtrot.com?subject=${encodeURIComponent("Jot & Trot feedback")}&body=${body}`;
+};
 sb.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT") showAuth(); });
 
 /* ---------- boot ---------- */

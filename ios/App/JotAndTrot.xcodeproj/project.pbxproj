@@ -24,6 +24,7 @@
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 		BB00000000000000000001B1 /* TripActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000001F1 /* TripActivityAttributes.swift */; };
 		BB00000000000000000002B1 /* LiveActivityPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000002F1 /* LiveActivityPlugin.swift */; };
+		BB00000000000000000008B1 /* CalendarPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000008F1 /* CalendarPlugin.swift */; };
 		BB00000000000000000001B2 /* TripActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000001F1 /* TripActivityAttributes.swift */; };
 		BB00000000000000000003B1 /* JotTrotWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000003F1 /* JotTrotWidgets.swift */; };
 		BB00000000000000000005B1 /* JotTrotWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = BB00000000000000000005F1 /* JotTrotWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -49,6 +50,7 @@
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		BB00000000000000000001F1 /* TripActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripActivityAttributes.swift; sourceTree = "<group>"; };
 		BB00000000000000000002F1 /* LiveActivityPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityPlugin.swift; sourceTree = "<group>"; };
+		BB00000000000000000008F1 /* CalendarPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarPlugin.swift; sourceTree = "<group>"; };
 		BB00000000000000000003F1 /* JotTrotWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JotTrotWidgets.swift; sourceTree = "<group>"; };
 		BB00000000000000000004F1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		BB00000000000000000005F1 /* JotTrotWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = JotTrotWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -140,6 +142,7 @@
 				9582B6822FE993A50072D4E8 /* SceneDelegate.swift */,
 				BB00000000000000000001F1 /* TripActivityAttributes.swift */,
 				BB00000000000000000002F1 /* LiveActivityPlugin.swift */,
+				BB00000000000000000008F1 /* CalendarPlugin.swift */,
 				AA00000000000000000001F1 /* AppleSignInPlugin.swift */,
 				AA00000000000000000004F1 /* PushPlugin.swift */,
 				AA00000000000000000005F1 /* SharePlugin.swift */,
@@ -282,6 +285,7 @@
 				AA00000000000000000002B1 /* MyViewController.swift in Sources */,
 				BB00000000000000000001B1 /* TripActivityAttributes.swift in Sources */,
 				BB00000000000000000002B1 /* LiveActivityPlugin.swift in Sources */,
+				BB00000000000000000008B1 /* CalendarPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
