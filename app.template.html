@@ -634,6 +634,8 @@ body.dark .day-warn { background: #3a2c18; color: #f0c896; border-color: #6b4e1f
       <button class="btn" id="join-btn">Open trip</button>
     </div>
     <div class="home-foot">
+      <a id="guide-link" href="#">❓ How it works</a>
+      <span style="color:var(--line)"> · </span>
       <a id="feedback-link" href="#">💬 Something broken or missing? Tell us</a>
     </div>
   </div>
@@ -3752,27 +3754,48 @@ async function onSignedIn(user) {
   flushPendingJoin();
 }
 
-function showWelcome(sampleId) {
+function showWelcome(sampleId) { showGuide(sampleId); }
+
+/* the tour — first run for new accounts, and anytime via "How it works" on the home screen */
+function showGuide(sampleId) {
+  const h = t => `<div style="font-weight:800;font-size:13px;margin:13px 0 3px;color:var(--teal);text-transform:uppercase;letter-spacing:.04em">${t}</div>`;
   openModal(`
-    <h2>Welcome to Jot & Trot 🧭</h2>
-    <p style="font-size:13.5px;line-height:1.65;color:var(--ink-soft);margin:10px 0 14px">
-      Plan trips on a live map, together with your crew. The quick version:
+    <h2>${sampleId ? "Welcome to Jot & Trot 🧭" : "How Jot & Trot works 🧭"}</h2>
+    <p style="font-size:13.5px;line-height:1.6;color:var(--ink-soft);margin:8px 0 2px">
+      Plan trips on a live map, together with your crew.
     </p>
-    <div style="font-size:13.5px;line-height:1.9;color:var(--ink)">
-      🗺️ <b>Create a trip</b> — the map flies to your destination and scouts ideas nearby<br>
-      ✨ <b>Scout anywhere</b> — pan the map, tap "Scout this area" for sights, food & hotels<br>
-      ⚡ <b>Auto-build</b> — one tap slots every idea into a day-by-day schedule<br>
-      🔗 <b>Share the code</b> — friends join in, add stops, and vote 👍👎<br>
-      📴 <b>Works offline</b> — your itinerary is saved for when you're travelling
+    <div style="font-size:13.5px;line-height:1.85;color:var(--ink)">
+      ${h("Plan it")}
+      🗺️ <b>Create a trip</b> — the map flies to your destination; search places or tap the map to add stops<br>
+      ✨ <b>Scout this area</b> — pan anywhere and tap it to find sights, food & hotels around the map view<br>
+      ⚡ <b>Auto-build schedule</b> — one tap slots every idea into days; drag stops to rearrange<br>
+      🕒 <b>Times & stays</b> — tag stops 🌅 morning / ☀️ afternoon / 🌙 evening; hotels span their nights; walking/driving times appear between stops<br>
+      📅 <b>No dates yet?</b> — start a date poll and let the crew vote on when to go
+      ${h("Do it together")}
+      🔗 <b>Share code</b> — friends join with a code or invite link and edit live alongside you<br>
+      👍 <b>Vote</b> on stops · 💬 <b>comment</b> · 📷 <b>add photos</b> — all on each stop's card<br>
+      📋 <b>Tasks</b> — "who books what" with check-offs · 💸 <b>Split</b> — log who paid, settle up later<br>
+      👀 <b>View-only link</b> (in Share) — show the plan to someone who isn't joining; they can look, not touch
+      ${h("Travel it")}
+      🧭 <b>Today view</b> — during the trip: what's up next, one-tap directions, tap a stop's number to check it off<br>
+      🔒 <b>Lock screen</b> — on iPhone, your next stop rides on the lock screen all day<br>
+      📆 <b>Calendar</b> — put the whole schedule on your calendar with one tap<br>
+      📴 <b>Offline</b> — the itinerary keeps working with no signal
+      ${h("Remember it")}
+      🏁 <b>Trip recap</b> — after the trip: your route, photos, and totals on one page, ready to share<br>
+      ⧉ <b>Duplicate</b> (in ✏️ Edit) — reuse this plan for the next crew or next year
     </div>
-    <p style="font-size:13.5px;color:var(--ink-soft);margin:14px 0 6px">
+    ${sampleId ? `<p style="font-size:13.5px;color:var(--ink-soft);margin:14px 0 4px">
       We've added an <b>example trip to Lisbon</b> so you can poke around — it's yours to edit or delete.
-    </p>
+    </p>` : ""}
     <div class="modal-actions">
-      <button class="btn" onclick="closeModal()">I'll explore myself</button>
-      <button class="btn primary" id="m-welcome-open">🇵🇹 Open the Lisbon example</button>
+      ${sampleId
+        ? `<button class="btn" onclick="closeModal()">I'll explore myself</button>
+           <button class="btn primary" id="m-welcome-open">🇵🇹 Open the Lisbon example</button>`
+        : `<button class="btn primary" onclick="closeModal()">Got it</button>`}
     </div>`);
-  $("m-welcome-open").onclick = () => { closeModal(); openTrip(sampleId); };
+  const open = $("m-welcome-open");
+  if (open) open.onclick = () => { closeModal(); openTrip(sampleId); };
 }
 
 $("auth-send").onclick = async () => {
@@ -3815,6 +3838,7 @@ $("auth-back").onclick = () => { $("auth-step-email").style.display = ""; $("aut
 $("auth-code").addEventListener("keydown", (e) => { if (e.key === "Enter") $("auth-verify").click(); });
 $("auth-email").addEventListener("keydown", (e) => { if (e.key === "Enter") $("auth-send").click(); });
 $("signout-btn").onclick = async () => { await sb.auth.signOut(); };
+$("guide-link").onclick = (e) => { e.preventDefault(); showGuide(); };
 $("feedback-link").onclick = (e) => {
   e.preventDefault();
   const C = window.Capacitor;
