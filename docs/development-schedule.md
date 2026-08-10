@@ -83,6 +83,14 @@ Three tracks, roughly in priority order within each. Suggested first picks: Live
 9. **In-app feedback channel** — ✅ built 10 Aug 2026. "💬 Something broken or missing? Tell us" on the home screen → mails support@jotandtrot.com with platform/user-agent context prefilled. (Reminder: make sure that address actually receives mail — it's also the one docs/support.html advertises.)
 10. **Quota watch & upgrade paths** — Geoapify free tier is 3,000 credits/day and Supabase is on the shared free-tier "Bithash" project; a burst of App Store downloads could brush both. Know the upgrade path before it's needed (Geoapify ~$49/mo first paid tier; Supabase Pro ~$25/mo — and real traction is the trigger to revisit the dropped Phase C backend split).
 
+## Phase G — The collaboration trio ✅ built 10 Aug 2026
+
+Theme: you always know what the crew did. All web-side — no new iOS build needed (the "foreground banner" native handler from Phase A turned out to already exist in the AppDelegate).
+
+1. **"While you were away" digest** — opening a trip after time away shows a 🔔 bar ("4 updates from the crew") with a detail modal: stops added (by whom, which day), comments, photos, expenses, tasks — only other people's changes. Backed by a new `trip_seen` table (per-user last-look timestamps, RLS'd to own rows), stamped on each trip open.
+2. **Live change toasts** — while you're in a trip, realtime inserts by others narrate quietly: "🧭 Leslie added 'Senso-ji'", "💬 Leslie: sounds great", 📷/💸/📋 likewise. Stop bursts (auto-plan) batch into one "added N stops" toast. Scout suggestion floods stay silent by design.
+3. **Web Push for the PWA** — Android/desktop installs now get the same "Leslie added 3 stops" pushes as iPhones. "🔔 Turn on notifications" link on the home screen (silent re-subscribe once granted); subscriptions stored in `trip_device_tokens` (platform `web`); the `apns-push` edge function v2 routes hex tokens → APNs, JSON tokens → Web Push (VAPID, npm:web-push), unchanged DB trigger. Verified: full VAPID/encryption handshake reaches FCM (bogus sub correctly 410s); expired subs are dropped gracefully. Real-device check pending: enable notifications in the Pixel PWA, then have another account add a stop.
+
 ## Ongoing throughout
 
 - TestFlight builds to the crew at the end of each phase

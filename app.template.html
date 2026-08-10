@@ -636,6 +636,8 @@ body.dark .day-warn { background: #3a2c18; color: #f0c896; border-color: #6b4e1f
     <div class="home-foot">
       <a id="guide-link" href="#">❓ How it works</a>
       <span style="color:var(--line)"> · </span>
+      <a id="push-link" href="#" style="display:none">🔔 Turn on notifications</a>
+      <span id="push-dot" style="color:var(--line);display:none"> · </span>
       <a id="feedback-link" href="#">💬 Something broken or missing? Tell us</a>
     </div>
   </div>
@@ -1091,6 +1093,7 @@ async function openTrip(id) {
   jjStore.setItem("jj-seen:" + id, String(Date.now()));
   showTripView();
   subscribeRealtime(id);
+  loadMemberNames(id).then(() => showActivityDigest(id));
   loadWeather();
   scrollToToday();
   await backfillDestCoords();
@@ -1126,6 +1129,54 @@ async function backfillDestCoords() {
   } catch (e) {}
 }
 
+/* ---------- who's who: uid -> display name for digest/toasts ---------- */
+async function loadMemberNames(tripId) {
+  try {
+    const { data } = await sb.rpc("jj_trip_members", { t: tripId });
+    if (data && state.trip && state.trip.id === tripId) {
+      state.memberNames = {};
+      for (const m of data) state.memberNames[m.user_id] = m.name;
+    }
+  } catch (e) {}
+}
+
+/* ---------- "while you were away" digest (Phase G) ---------- */
+async function showActivityDigest(tripId) {
+  state._digest = null;
+  try {
+    const me = state.user && state.user.id;
+    if (!me) return;
+    const { data: seenRow } = await sb.from("trip_seen").select("seen_at")
+      .eq("trip_id", tripId).eq("user_id", me).maybeSingle();
+    // stamp this visit either way — the digest compares against the previous one
+    sb.from("trip_seen").upsert({ trip_id: tripId, user_id: me, seen_at: new Date().toISOString() }).then(() => {});
+    if (!seenRow) return; // first look at this trip — nothing to catch up on
+    const seen = new Date(seenRow.seen_at);
+    const after = r => r.created_at && new Date(r.created_at) > seen;
+    const mine = uid => uid === me;
+    const [expRes, taskRes] = await Promise.all([
+      sb.from("trip_expenses").select("description,created_by,created_at").eq("trip_id", tripId).gt("created_at", seenRow.seen_at),
+      sb.from("trip_tasks").select("title,created_by,created_at").eq("trip_id", tripId).gt("created_at", seenRow.seen_at),
+    ]);
+    if (!state.trip || state.trip.id !== tripId) return;
+    const items = [];
+    const nameOf = uid => (state.memberNames && state.memberNames[uid]) || "Someone";
+    for (const s of state.stops.filter(x => after(x) && x.created_by && !mine(x.created_by)))
+      items.push(`${(CATEGORIES[s.category] || CATEGORIES.other).emoji} <b>${esc(nameOf(s.created_by))}</b> added ${esc(s.name)}${s.day_index > 0 ? ` (Day ${s.day_index})` : ""}`);
+    for (const c of (state.comments || []).filter(x => after(x) && !mine(x.user_id)))
+      items.push(`💬 <b>${esc(c.author_name || "Someone")}</b>: ${esc(String(c.body || "").slice(0, 70))}`);
+    for (const p of (state.photos || []).filter(x => after(x) && !mine(x.created_by)))
+      items.push(`📷 <b>${esc(p.author_name || "Someone")}</b> added a photo`);
+    for (const x of (expRes.data || []).filter(r => !mine(r.created_by)))
+      items.push(`💸 <b>${esc(nameOf(x.created_by))}</b> logged ${esc(x.description)}`);
+    for (const x of (taskRes.data || []).filter(r => !mine(r.created_by)))
+      items.push(`📋 <b>${esc(nameOf(x.created_by))}</b> added task: ${esc(x.title)}`);
+    if (!items.length) return;
+    state._digest = items;
+    renderItinerary();
+  } catch (e) { /* the digest is a nicety — never block the trip */ }
+}
+
 /* ---------- realtime ---------- */
 let rtChannel = null, rtDebounce = null;
 function subscribeRealtime(tripId) {
@@ -1135,16 +1186,32 @@ function subscribeRealtime(tripId) {
       clearTimeout(rtDebounce);
       rtDebounce = setTimeout(() => { if (state.trip && state.trip.id === tripId) reloadTripData(); }, 250);
     };
+    // live narration: quiet toasts when someone ELSE changes the trip while you're in it
+    const crewName = row => (state.memberNames && state.memberNames[row.created_by || row.user_id]) || row.author_name || "Someone";
+    const isOther = row => { const uid = row && (row.created_by || row.user_id); return uid && state.user && uid !== state.user.id; };
+    let stopBurst = null; // auto-plan inserts many stops at once — batch them into one toast
+    const noteStop = (p) => {
+      if (p.eventType !== "INSERT" || !isOther(p.new)) return;
+      if (!stopBurst) { stopBurst = { name: crewName(p.new), first: p.new.name, count: 0, timer: null }; }
+      stopBurst.count++;
+      clearTimeout(stopBurst.timer);
+      stopBurst.timer = setTimeout(() => {
+        toast(stopBurst.count === 1 ? `🧭 ${stopBurst.name} added “${stopBurst.first}”` : `🧭 ${stopBurst.name} added ${stopBurst.count} stops`);
+        stopBurst = null;
+      }, 1200);
+    };
+    const note = (fmt) => (p) => { if (p.eventType === "INSERT" && isOther(p.new)) { const m = fmt(crewName(p.new), p.new); if (m) toast(m); } };
     rtChannel = sb.channel(`trip-${tripId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "trip_stops", filter: `trip_id=eq.${tripId}` }, onChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_stops", filter: `trip_id=eq.${tripId}` }, (p) => { noteStop(p); onChange(p); })
       .on("postgres_changes", { event: "*", schema: "public", table: "trip_votes", filter: `trip_id=eq.${tripId}` }, onChange)
       .on("postgres_changes", { event: "*", schema: "public", table: "trip_suggestions", filter: `trip_id=eq.${tripId}` }, onChange)
-      .on("postgres_changes", { event: "*", schema: "public", table: "trip_expenses", filter: `trip_id=eq.${tripId}` }, () => { if ($("x-body")) refreshExpenses(); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "trip_tasks", filter: `trip_id=eq.${tripId}` }, () => { if ($("t-body")) refreshTasks(); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "trip_photos", filter: `trip_id=eq.${tripId}` }, onChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_expenses", filter: `trip_id=eq.${tripId}` }, (p) => { note((n, r) => `💸 ${n} logged ${r.description}`)(p); if ($("x-body")) refreshExpenses(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_tasks", filter: `trip_id=eq.${tripId}` }, (p) => { note((n, r) => `📋 ${n} added “${r.title}”`)(p); if ($("t-body")) refreshTasks(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_photos", filter: `trip_id=eq.${tripId}` }, (p) => { note((n) => `📷 ${n} added a photo`)(p); onChange(p); })
       .on("postgres_changes", { event: "*", schema: "public", table: "trip_date_options", filter: `trip_id=eq.${tripId}` }, onChange)
       .on("postgres_changes", { event: "*", schema: "public", table: "trip_date_votes", filter: `trip_id=eq.${tripId}` }, onChange)
-      .on("postgres_changes", { event: "*", schema: "public", table: "trip_comments", filter: `trip_id=eq.${tripId}` }, async () => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_comments", filter: `trip_id=eq.${tripId}` }, async (p) => {
+        note((n, r) => `💬 ${n}: ${String(r.body || "").slice(0, 60)}`)(p);
         const { data } = await sb.from("trip_comments").select("*").eq("trip_id", tripId).order("created_at");
         if (data && state.trip && state.trip.id === tripId) { state.comments = data; renderItinerary(); renderCommentList(); }
       })
@@ -2550,6 +2617,24 @@ function renderItinerary() {
   let tripTotal = 0;
   let anyCost = false;
 
+  // catch-up digest: what the crew did while you were away
+  if (state._digest && state._digest.length) {
+    const n = state._digest.length;
+    const bar = document.createElement("div");
+    bar.className = "today-bar";
+    bar.innerHTML = `
+      <div class="today-line">🔔 While you were away</div>
+      <div class="today-next">${n} update${n > 1 ? "s" : ""} from the crew</div>
+      <button class="btn dg-see">See what's new</button>
+      <button class="btn subtle dg-ok">✓ Caught up</button>`;
+    bar.querySelector(".dg-see").onclick = () => openModal(`
+      <h2>🔔 While you were away</h2>
+      <div style="font-size:13.5px;line-height:2;color:var(--ink)">${state._digest.join("<br>")}</div>
+      <div class="modal-actions"><button class="btn primary" onclick="state._digest=null;closeModal();renderItinerary()">✓ Caught up</button></div>`);
+    bar.querySelector(".dg-ok").onclick = () => { state._digest = null; renderItinerary(); };
+    wrap.appendChild(bar);
+  }
+
   const plannable = plannableCount();
   if (plannable > 0) {
     const bar = document.createElement("div");
@@ -3672,6 +3757,50 @@ async function syncLiveActivity(todayIdx, dayCount) {
   } catch (e) { /* web, or an older shell without the plugin */ }
 }
 
+/* ---------- Web Push (Android PWA + desktop): same alerts the iPhones get ---------- */
+const VAPID_PUBLIC = "BK043fVaMMaYMbLw8vbLLSGEZfqVHS6EM-0CQdUmdzQE_ebt0VIGo7Azfq0-KQqcdvaAy296jeYJkFT4hwI9Pbs";
+function webPushSupported() {
+  const C = window.Capacitor;
+  if (C && C.isNativePlatform && C.isNativePlatform()) return false; // iPhone app uses APNs
+  return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window && location.protocol === "https:";
+}
+function vapidKeyBytes(s) {
+  const pad = "=".repeat((4 - (s.length % 4)) % 4);
+  const raw = atob((s + pad).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(raw, c => c.charCodeAt(0));
+}
+async function enableWebPush(interactive) {
+  try {
+    if (!webPushSupported() || !state.user) return false;
+    if (Notification.permission !== "granted") {
+      if (!interactive) return false;
+      if ((await Notification.requestPermission()) !== "granted") { toast("Notifications stay off — you can enable them in your browser settings"); return false; }
+    }
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidKeyBytes(VAPID_PUBLIC) });
+    await sb.from("trip_device_tokens").upsert({
+      token: JSON.stringify(sub), user_id: state.user.id, platform: "web",
+      updated_at: new Date().toISOString(),
+    });
+    if (interactive) toast("🔔 You'll hear when the crew changes a trip");
+    syncPushLink();
+    return true;
+  } catch (e) { if (interactive) toast("Couldn't turn notifications on here"); return false; }
+}
+async function syncPushLink() {
+  const link = $("push-link"), dot = $("push-dot");
+  if (!link) return;
+  if (!webPushSupported()) { link.style.display = "none"; dot.style.display = "none"; return; }
+  let on = false;
+  if (Notification.permission === "granted") {
+    try { on = !!(await (await navigator.serviceWorker.ready).pushManager.getSubscription()); } catch (e) {}
+  }
+  link.textContent = on ? "🔔 Notifications are on" : "🔔 Turn on notifications";
+  link.style.display = ""; dot.style.display = "";
+  link.onclick = (e) => { e.preventDefault(); if (!on) enableWebPush(true); else toast("🔔 Already on for this device"); };
+}
+
 /* on the iPhone: ask for notification permission and file this device's token */
 async function registerPushIfNative() {
   try {
@@ -3750,6 +3879,8 @@ async function onSignedIn(user) {
     }
   } catch (e) {}
   registerPushIfNative(); // fire-and-forget; prompts once on iPhone
+  if (webPushSupported() && Notification.permission === "granted") enableWebPush(false); // silent re-subscribe
+  syncPushLink();
   showHome();
   flushPendingJoin();
 }
