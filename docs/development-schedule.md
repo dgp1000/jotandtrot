@@ -67,7 +67,7 @@ Three tracks, roughly in priority order within each. Suggested first picks: Live
 **Native depth (graduated from the parking lot):**
 
 1. **Live Activities / lock-screen widget** — ✅ built 10 Aug 2026, verified on David's iPhone same day (up-next stop shows on the lock screen). Lock screen + Dynamic Island show today's "up next" stop (category emoji, name, slot, day X/Y, stops done/total), mirroring the Today-view hero; starts when today has an unvisited stop, updates live on check-offs, ends when the day is done or the trip is closed. New `JotTrotWidgets` extension target (iOS 16.2+; app itself still supports 15.0), `LiveActivityPlugin` Capacitor bridge, shared `TripActivityAttributes`. Simulator build verified. To test on the phone: run from Xcode, open a trip whose dates include today, lock the phone.
-2. **iPad layout** — map + plan side by side. We already ship an iPad screenshot; a real split layout is the follow-through.
+2. **iPad layout** — ✅ built 10 Aug 2026, awaiting on-device look. iPad portrait now keeps map + plan side by side (it used to fall into the one-pane phone layout); landscape already did. Done by splitting the mobile media query by concern: compact header ≤900px, one-pane-with-switcher ≤700px; sidebar slims to 360px in the 701–1000px range and widens to 440px above 1200px; safe-area padding for the home indicator. iPad Split View multitasking degrades to the phone layout automatically. Verified via Playwright at 820×1180, 1180×820, and 430×932 (phone unchanged).
 3. **Android** — modest lift thanks to Capacitor. Closes the invite-link loop for Android friends (today they land on the web app).
 
 **Growth & stickiness:**
