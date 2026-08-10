@@ -10,7 +10,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     /// Set to a Sentry DSN to enable native crash reporting; empty = off.
     /// Keep in sync with SENTRY_DSN in app.template.html (same Sentry project).
-    static let sentryDSN = ""
+    static let sentryDSN = "https://b9a134c5a87a688ee9e15dfd02a58c5e@o4511887894249472.ingest.us.sentry.io/4511887900475392"
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         if !AppDelegate.sentryDSN.isEmpty {
