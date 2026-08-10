@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
 <title>Jot & Trot</title>
+<meta name="theme-color" content="#0f6b6b">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <style id="leaflet-css">
 /*__LEAFLET_CSS__*/
 </style>
@@ -3822,6 +3825,12 @@ $("feedback-link").onclick = (e) => {
 sb.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT") showAuth(); });
 
 /* ---------- boot ---------- */
+// PWA: installable on Android/desktop; the shell loads offline (trip data
+// already lives in localStorage). Web only — the iOS shell has its own bundle.
+if ("serviceWorker" in navigator && location.protocol === "https:" &&
+    !(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform())) {
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+}
 window.__ta = state; // debugging/testing handle
 (async () => {
   const C = window.Capacitor;
