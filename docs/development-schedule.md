@@ -60,6 +60,29 @@ Prioritized after talking through where the app goes next (August 2026):
 
 Renamed from JollyJaunter to **Jot & Trot** (jot the plan, trot the route). jotandtrot.com and jotandtrot.app registered the same day; codebase, Xcode project, and website copy renamed. Bundle ID changed to com.wavey.jotandtrot before App Store submission.
 
+## Phase F — Post-submission expansion (drafted 10 Aug 2026, while awaiting App Review)
+
+Three tracks, roughly in priority order within each. Suggested first picks: Live Activities, trip recap sharing, crash reporting.
+
+**Native depth (graduated from the parking lot):**
+
+1. **Live Activities / lock-screen widget** — today's plan on the lock screen during a trip: "Up next: Senso-ji, 20 min walk." Extends the existing Today view; the moment of highest user value is exactly when nobody wants to unlock a phone. Needs a small native extension target (WidgetKit/ActivityKit) alongside the Capacitor shell.
+2. **iPad layout** — map + plan side by side. We already ship an iPad screenshot; a real split layout is the follow-through.
+3. **Android** — modest lift thanks to Capacitor. Closes the invite-link loop for Android friends (today they land on the web app).
+
+**Growth & stickiness:**
+
+4. **Post-trip memories / trip recap** — a recap view built from data we already collect (visited check-offs, photos per stop, expenses): map of everywhere you went, photo highlights, final costs. Gives the app a life after the trip and is inherently shareable — every recap markets the app.
+5. **Read-only public itinerary link** — share "here's our Tokyo plan" with someone who isn't joining the trip. Cheap on the web app; every share is an ad.
+6. **Calendar export** — push the trip schedule to Apple/Google Calendar so the plan appears where people already look.
+7. **Trip templates / cloning** — "copy this trip" for annual trips or reusing a friend's itinerary.
+
+**Operational hardening (matters the day strangers arrive):**
+
+8. **Crash & error reporting** — Sentry's Capacitor SDK (or similar). Without it, a stranger's bug is invisible.
+9. **In-app feedback channel** — at minimum a mailto to support on jotandtrot.com; strangers won't text us like the crew does.
+10. **Quota watch & upgrade paths** — Geoapify free tier is 3,000 credits/day and Supabase is on the shared free-tier "Bithash" project; a burst of App Store downloads could brush both. Know the upgrade path before it's needed (Geoapify ~$49/mo first paid tier; Supabase Pro ~$25/mo — and real traction is the trigger to revisit the dropped Phase C backend split).
+
 ## Ongoing throughout
 
 - TestFlight builds to the crew at the end of each phase
@@ -68,7 +91,7 @@ Renamed from JollyJaunter to **Jot & Trot** (jot the plan, trot the route). jota
 
 ## Deferred / ideas parking lot
 
-Android (Capacitor makes this a modest lift later) · iPad layout (map + plan side by side) · lock-screen widgets / Live Activities for today's plan. (Expense splitting, photos & notes, time-of-day slots, and the web app graduated to Phase E above.)
+Empty for now — Android, iPad layout, and lock-screen widgets / Live Activities graduated to Phase F above. (Expense splitting, photos & notes, time-of-day slots, and the web app graduated to Phase E earlier.)
 
 ## Rough cost picture at launch
 
