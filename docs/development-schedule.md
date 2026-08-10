@@ -20,16 +20,18 @@ Let the crew use the app all week; their complaints set the fix list. Alongside,
 
 *Done: jotandtrot.com registered 7 Aug 2026.*
 
-## Phase B — Production map services (Week 2) ⭐ highest value
+## Phase B — Production map services ✅ COMPLETE (verified 10 Aug 2026)
 
-Scouting and search still depend on free volunteer OpenStreetMap servers, which have twice caused outages during this project. This phase makes the app's core boringly reliable:
+Shipped as "Week 2: production map services via Geoapify" — everything runs on one Geoapify account (free tier explicitly allows commercial use with attribution; 3,000 credits/day; paid tiers from ~$49/mo if usage grows):
 
-- Map tiles → MapTiler or Stadia (free tier covers thousands of users; dark tiles included)
-- Geocoding/search → same vendor's API
-- Scouting POIs → Geoapify/Foursquare API, or a self-hosted Overpass server (~$20/mo)
-- Keep OpenStreetMap attribution (ODbL requirement)
+- Map tiles → Geoapify (`osm-bright-smooth` light / `dark-matter-brown` dark) ✅
+- Geocoding/search + reverse → Geoapify Geocoding API ✅
+- Scouting POIs → Geoapify Places API ✅
+- Routing/travel times → Geoapify Routing (from Phase E work) ✅
+- Community servers (OSM tiles, Nominatim, Overpass mirrors) kept as automatic fallback if Geoapify errors ✅
+- Geoapify + OpenStreetMap attribution on the map (ODbL + Geoapify free-tier requirements) ✅
 
-*David's part: create the vendor account (free), hand over the API key.*
+Verified 10 Aug: key live (tiles/geocode/places all 200), embedded in the built app, `www/`, and the iOS shell. Note: MapTiler was the original candidate but its free tier is non-commercial only — Geoapify avoids a forced migration at launch.
 
 ## Phase C — Backend split & public-facing pages (Week 3)
 
