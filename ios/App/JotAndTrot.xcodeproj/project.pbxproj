@@ -21,6 +21,11 @@
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
+		BB00000000000000000001B1 /* TripActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000001F1 /* TripActivityAttributes.swift */; };
+		BB00000000000000000002B1 /* LiveActivityPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000002F1 /* LiveActivityPlugin.swift */; };
+		BB00000000000000000001B2 /* TripActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000001F1 /* TripActivityAttributes.swift */; };
+		BB00000000000000000003B1 /* JotTrotWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000003F1 /* JotTrotWidgets.swift */; };
+		BB00000000000000000005B1 /* JotTrotWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = BB00000000000000000005F1 /* JotTrotWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -41,6 +46,11 @@
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
 		9582B6822FE993A50072D4E8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
+		BB00000000000000000001F1 /* TripActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripActivityAttributes.swift; sourceTree = "<group>"; };
+		BB00000000000000000002F1 /* LiveActivityPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityPlugin.swift; sourceTree = "<group>"; };
+		BB00000000000000000003F1 /* JotTrotWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JotTrotWidgets.swift; sourceTree = "<group>"; };
+		BB00000000000000000004F1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		BB00000000000000000005F1 /* JotTrotWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = JotTrotWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -52,7 +62,46 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BB0000000000000000000703 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		BB0000000000000000000701 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				BB00000000000000000005B1 /* JotTrotWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXContainerItemProxy section */
+		BB0000000000000000000901 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BB0000000000000000000801;
+			remoteInfo = JotTrotWidgets;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+		BB0000000000000000000A01 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BB0000000000000000000801 /* JotTrotWidgets */;
+			targetProxy = BB0000000000000000000901 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXGroup section */
 		504EC2FB1FED79650016851F = {
@@ -60,6 +109,7 @@
 			children = (
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
 				504EC3061FED79650016851F /* JotAndTrot */,
+				BB0000000000000000000601 /* JotTrotWidgets */,
 				504EC3051FED79650016851F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -68,14 +118,26 @@
 			isa = PBXGroup;
 			children = (
 				504EC3041FED79650016851F /* JotAndTrot.app */,
+				BB00000000000000000005F1 /* JotTrotWidgets.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		BB0000000000000000000601 /* JotTrotWidgets */ = {
+			isa = PBXGroup;
+			children = (
+				BB00000000000000000003F1 /* JotTrotWidgets.swift */,
+				BB00000000000000000004F1 /* Info.plist */,
+			);
+			path = JotTrotWidgets;
 			sourceTree = "<group>";
 		};
 		504EC3061FED79650016851F /* JotAndTrot */ = {
 			isa = PBXGroup;
 			children = (
 				9582B6822FE993A50072D4E8 /* SceneDelegate.swift */,
+				BB00000000000000000001F1 /* TripActivityAttributes.swift */,
+				BB00000000000000000002F1 /* LiveActivityPlugin.swift */,
 				AA00000000000000000001F1 /* AppleSignInPlugin.swift */,
 				AA00000000000000000004F1 /* PushPlugin.swift */,
 				AA00000000000000000005F1 /* SharePlugin.swift */,
@@ -105,10 +167,12 @@
 				504EC3001FED79650016851F /* Sources */,
 				504EC3011FED79650016851F /* Frameworks */,
 				504EC3021FED79650016851F /* Resources */,
+				BB0000000000000000000701 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				BB0000000000000000000A01 /* PBXTargetDependency */,
 			);
 			name = JotAndTrot;
 			packageProductDependencies = (
@@ -117,6 +181,23 @@
 			productName = JotAndTrot;
 			productReference = 504EC3041FED79650016851F /* JotAndTrot.app */;
 			productType = "com.apple.product-type.application";
+		};
+		BB0000000000000000000801 /* JotTrotWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BB0000000000000000000C01 /* Build configuration list for PBXNativeTarget "JotTrotWidgets" */;
+			buildPhases = (
+				BB0000000000000000000702 /* Sources */,
+				BB0000000000000000000703 /* Frameworks */,
+				BB0000000000000000000704 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = JotTrotWidgets;
+			productName = JotTrotWidgets;
+			productReference = BB00000000000000000005F1 /* JotTrotWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -130,6 +211,10 @@
 					504EC3031FED79650016851F = {
 						CreatedOnToolsVersion = 9.2;
 						LastSwiftMigration = 1100;
+						ProvisioningStyle = Automatic;
+					};
+					BB0000000000000000000801 = {
+						CreatedOnToolsVersion = 26.0;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -151,6 +236,7 @@
 			projectRoot = "";
 			targets = (
 				504EC3031FED79650016851F /* JotAndTrot */,
+				BB0000000000000000000801 /* JotTrotWidgets */,
 			);
 		};
 /* End PBXProject section */
@@ -169,6 +255,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BB0000000000000000000704 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -183,6 +276,17 @@
 				AA00000000000000000005B1 /* SharePlugin.swift in Sources */,
 				AA00000000000000000006B1 /* LinkPlugin.swift in Sources */,
 				AA00000000000000000002B1 /* MyViewController.swift in Sources */,
+				BB00000000000000000001B1 /* TripActivityAttributes.swift in Sources */,
+				BB00000000000000000002B1 /* LiveActivityPlugin.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BB0000000000000000000702 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BB00000000000000000003B1 /* JotTrotWidgets.swift in Sources */,
+				BB00000000000000000001B2 /* TripActivityAttributes.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -371,6 +475,53 @@
 			};
 			name = Release;
 		};
+		BB0000000000000000000B11 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 13;
+				DEVELOPMENT_TEAM = 48MUH57DEC;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = JotTrotWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wavey.jotandtrot.JotTrotWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		BB0000000000000000000B12 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 13;
+				DEVELOPMENT_TEAM = 48MUH57DEC;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = JotTrotWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.wavey.jotandtrot.JotTrotWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -388,6 +539,15 @@
 			buildConfigurations = (
 				504EC3171FED79650016851F /* Debug */,
 				504EC3181FED79650016851F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BB0000000000000000000C01 /* Build configuration list for PBXNativeTarget "JotTrotWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BB0000000000000000000B11 /* Debug */,
+				BB0000000000000000000B12 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

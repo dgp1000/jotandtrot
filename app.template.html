@@ -1163,6 +1163,7 @@ function showTripView() {
 function showHome() {
   unsubscribeRealtime();
   state.trip = null;
+  syncLiveActivity(0, 0);
   document.body.classList.remove("in-trip");
   $("trip-view").classList.remove("active");
   $("home-view").style.display = "block";
@@ -2306,6 +2307,7 @@ function renderItinerary() {
     }
     wrap.appendChild(bar);
   }
+  syncLiveActivity(todayIdx, dayCount);
 
   for (const d of days) {
     const stops = state.stops.filter(s => s.day_index === d).sort((a, b) => a.order_index - b.order_index);
@@ -3220,6 +3222,39 @@ async function nativeCall(plugin, method, options) {
   if (typeof C.registerPlugin === "function") return C.registerPlugin(plugin)[method](options);
   if (typeof C.nativePromise === "function") return C.nativePromise(plugin, method, options);
   throw new Error("Capacitor bridge has no plugin call surface");
+}
+
+/* lock-screen Live Activity mirroring the "up next" hero (iOS 16.2+, native only).
+   Starts when today has an unvisited stop, updates on check-offs, ends otherwise. */
+let _laLast = "";
+async function syncLiveActivity(todayIdx, dayCount) {
+  try {
+    const C = window.Capacitor;
+    if (!(C && C.isNativePlatform && C.isNativePlatform())) return;
+    let payload = null;
+    if (state.trip && todayIdx > 0) {
+      const todays = state.stops.filter(s => s.day_index === todayIdx).sort((a, b) => a.order_index - b.order_index);
+      const next = todays.find(s => !s.visited_at);
+      if (next) {
+        const cat = CATEGORIES[next.category] || CATEGORIES.other;
+        const slot = next.slot && SLOT_META[next.slot];
+        payload = {
+          tripName: state.trip.name || "Trip",
+          dayLabel: `Day ${todayIdx} of ${dayCount}`,
+          stopName: next.name,
+          detail: [cat.label, slot ? `${slot.emoji} ${slot.label.toLowerCase()}` : null, `day ${todayIdx}/${dayCount}`].filter(Boolean).join(" · "),
+          emoji: cat.emoji,
+          stopsDone: todays.filter(s => s.visited_at).length,
+          stopsTotal: todays.length,
+        };
+      }
+    }
+    const key = JSON.stringify(payload);
+    if (key === _laLast) return; // unchanged — skip the bridge round-trip
+    _laLast = key;
+    if (payload) await nativeCall("LiveActivity", "show", payload);
+    else await nativeCall("LiveActivity", "end", {});
+  } catch (e) { /* web, or an older shell without the plugin */ }
 }
 
 /* on the iPhone: ask for notification permission and file this device's token */

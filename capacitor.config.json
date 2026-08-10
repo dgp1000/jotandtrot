@@ -13,6 +13,7 @@
     "AppleSignInPlugin",
     "PushPlugin",
     "SharePlugin",
-    "LinkPlugin"
+    "LinkPlugin",
+    "LiveActivityPlugin"
   ]
 }
