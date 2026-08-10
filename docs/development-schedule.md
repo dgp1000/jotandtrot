@@ -35,7 +35,7 @@ Verified 10 Aug: key live (tiles/geocode/places all 200), embedded in the built 
 
 ## Phase C — Backend split & public-facing pages — DROPPED (decided 10 Aug 2026)
 
-Decided not needed for launch. Original items kept here for the record in case any resurface later: dedicated Supabase project (stays on the shared "Bithash" project for now) · custom sign-in email sender on jotandtrot.com · APNs production topic checks / webhook secret rotation. The public-facing pages (landing, privacy, support) already exist under `docs/` and are deployed.
+Decided not needed for launch. (Correction 10 Aug 2026: the app in fact already runs on its own dedicated Supabase project, "Jot and Trot" — the "shared Bithash" note was stale.) Remaining items kept for the record in case they resurface: custom sign-in email sender on jotandtrot.com · APNs production topic checks / webhook secret rotation. The public-facing pages (landing, privacy, support) already exist under `docs/` and are deployed.
 
 ## Phase D — Listing & App Review ✅ COMPLETE — SUBMITTED, awaiting Apple review (as of 10 Aug 2026)
 
@@ -73,7 +73,7 @@ Three tracks, roughly in priority order within each. Suggested first picks: Live
 **Growth & stickiness:**
 
 4. **Post-trip memories / trip recap** — ✅ built 10 Aug 2026. Once the trip's end date passes, a "🏁 Trip complete" banner opens the recap: stat tiles (days, stops visited, km between stops, photo count, total spent), a mini-map drawing each day's route in the day's color, a day-by-day rundown, and the trip's photo wall. Share button sends a text summary (native share sheet on iOS, system share or clipboard on web) ending "Planned with Jot & Trot · jotandtrot.com". Smoke-tested with Playwright against the jj-shot demo trip. Possible later polish: shareable recap *image* card.
-5. **Read-only public itinerary link** — share "here's our Tokyo plan" with someone who isn't joining the trip. Cheap on the web app; every share is an ad.
+5. **Read-only public itinerary link** — ✅ built 10 Aug 2026. Share modal gains a "👀 View-only link" section: owner creates/revokes app.jotandtrot.com/plan/TOKEN; anyone with it (no sign-in) sees the plan + map with a "plan yours" banner. Deliberately separate from the join code (which grants membership). Backend: `public_slug` column + `jj_set_public_link` (owner-only) + `jj_public_trip` (anon, whitelisted fields — stops/notes/costs only; never votes, photos, comments, expenses, or member names). Verified end-to-end incl. revocation. Note: enabling the link shares stop notes — worth a line in the UI copy someday.
 6. **Calendar export** — ✅ built 10 Aug 2026, native path awaiting on-device test. "📆 Calendar" header button (dated trips only). On iPhone: CalendarPlugin (EventKit) adds events straight to Apple Calendar behind the iOS permission prompt (write-only access on iOS 17+; usage strings in Info.plist). On web: downloads an .ics. Slot-tagged stops become timed events (🌅 9–11, ☀️ 13–15, 🌙 19–21), untagged all-day, hotels span the stay; lodging-free days verified via Playwright (.ics well-formed).
 7. **Trip templates / cloning** — ✅ built 10 Aug 2026. "⧉ Duplicate" in the Edit-trip modal: copies the plan (stops, days, slots, notes, costs, ideas) with fresh history — no votes, photos, comments, expenses, or visited marks; the copy is yours and undated, ready for new dates. Verified end-to-end against the demo trip.
 
