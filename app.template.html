@@ -503,6 +503,17 @@ body.dark .day-warn { background: #3a2c18; color: #f0c896; border-color: #6b4e1f
 .dest-result .dr-main { font-weight: 600; }
 .dest-result .dr-sub { color: var(--ink-soft); font-size: 11.5px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+#modal.wide { width: 640px; }
+.recap-sub { color: var(--ink-soft); font-size: 13px; margin: -10px 0 14px; }
+.recap-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.recap-stat { background: var(--bg); border-radius: 12px; padding: 10px 8px; text-align: center; }
+.recap-stat b { display: block; font-size: 18px; letter-spacing: -0.02em; }
+.recap-stat span { font-size: 11.5px; color: var(--ink-soft); }
+#recap-map { height: 220px; border-radius: 12px; margin-bottom: 14px; background: var(--line); }
+.recap-day { padding: 7px 2px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.recap-day .rd-stops { color: var(--ink-soft); font-size: 12.5px; margin-top: 2px; }
+.recap-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; margin-top: 14px; }
+.recap-photos img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 10px; cursor: pointer; background: var(--line); }
 
 /* map markers */
 .pin {
@@ -763,7 +774,8 @@ function ensureVoter() {
 }
 
 /* ---------- modal helpers ---------- */
-function openModal(html) {
+function openModal(html, wide) {
+  $("modal").classList.toggle("wide", !!wide);
   $("modal").innerHTML = html;
   $("modal-backdrop").classList.add("open");
 }
@@ -2325,6 +2337,19 @@ function renderItinerary() {
   }
   syncLiveActivity(todayIdx, dayCount);
 
+  // after the trip: the recap
+  const tripOver = state.trip.start_date && state.trip.end_date && localISODate() > state.trip.end_date;
+  if (tripOver && state.stops.some(s => s.day_index > 0)) {
+    const bar = document.createElement("div");
+    bar.className = "today-bar";
+    bar.innerHTML = `
+      <div class="today-line">🏁 Trip complete</div>
+      <div class="today-next">Relive it — the map, the photos, the numbers.</div>
+      <button class="btn recap-open">✨ Trip recap</button>`;
+    bar.querySelector(".recap-open").onclick = showTripRecap;
+    wrap.appendChild(bar);
+  }
+
   for (const d of days) {
     const stops = state.stops.filter(s => s.day_index === d).sort((a, b) => a.order_index - b.order_index);
     if (d === 0 && stops.length === 0 && !dragId) continue; // hide empty ideas bucket
@@ -2947,6 +2972,120 @@ async function refreshExpenses() {
     });
     if (error) { toast("Couldn't save the expense"); console.error(error); return; }
     refreshExpenses();
+  };
+}
+
+/* ---------- trip recap (after the trip ends) ---------- */
+async function showTripRecap() {
+  const trip = state.trip;
+  if (!trip) return;
+  const dayCount = tripDayCount(trip);
+  const planned = state.stops.filter(s => s.day_index > 0);
+  const visited = planned.filter(s => s.visited_at);
+  let km = 0;
+  for (let d = 1; d <= dayCount; d++) {
+    const r = routableStops(d);
+    for (let i = 1; i < r.length; i++) km += haversineKm(r[i - 1], r[i]);
+  }
+  const kmLabel = km >= 10 ? Math.round(km) : Math.round(km * 10) / 10;
+  const dates = trip.start_date ? `${dayDate(trip, 1)} – ${dayDate(trip, dayCount)}` : "";
+
+  const dayRows = [];
+  for (let d = 1; d <= dayCount; d++) {
+    const stops = state.stops.filter(s => s.day_index === d).sort((a, b) => a.order_index - b.order_index);
+    if (!stops.length) continue;
+    const done = stops.filter(s => s.visited_at).length;
+    dayRows.push(`<div class="recap-day">
+      <b>Day ${d}</b> · ${dayDate(trip, d)} — ${done}/${stops.length} visited
+      <div class="rd-stops">${stops.map(s => `${(CATEGORIES[s.category] || CATEGORIES.other).emoji} ${esc(s.name)}`).join("  ·  ")}</div>
+    </div>`);
+  }
+
+  if (state._recapMap) { try { state._recapMap.remove(); } catch (e) {} state._recapMap = null; }
+  openModal(`
+    <h2>🏁 ${esc(trip.name)} — the recap</h2>
+    <div class="recap-sub">${esc(trip.destination || "")}${dates ? ` · ${dates}` : ""}<span id="recap-crew"></span></div>
+    <div class="recap-stats">
+      <div class="recap-stat"><b>${dayCount}</b><span>days</span></div>
+      <div class="recap-stat"><b>${visited.length}/${planned.length}</b><span>stops visited</span></div>
+      ${km > 0 ? `<div class="recap-stat"><b>${kmLabel} km</b><span>between stops</span></div>` : ""}
+      ${(state.photos || []).length ? `<div class="recap-stat"><b>${state.photos.length}</b><span>photos</span></div>` : ""}
+      <div class="recap-stat" id="recap-spent" style="display:none"><b></b><span>spent</span></div>
+    </div>
+    <div id="recap-map"></div>
+    ${dayRows.join("")}
+    <div class="recap-photos" id="recap-photos"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Close</button>
+      <button class="btn primary" id="recap-share">📤 Share</button>
+    </div>`, true);
+
+  // the route we actually trotted, day by day
+  setTimeout(() => {
+    const el = $("recap-map");
+    if (!el) return;
+    const m = L.map(el, { zoomControl: false, attributionControl: false });
+    state._recapMap = m;
+    const style = document.body.classList.contains("dark") ? "dark-matter-brown" : "osm-bright-smooth";
+    (geoOn()
+      ? L.tileLayer(`https://maps.geoapify.com/v1/tile/${style}/{z}/{x}/{y}.png?apiKey=${GEO_KEY}`, { maxZoom: 19 })
+      : L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 })
+    ).addTo(m);
+    const all = [];
+    for (let d = 1; d <= dayCount; d++) {
+      const r = routableStops(d);
+      const pts = r.map(s => [s.lat, s.lng]);
+      all.push(...pts);
+      if (pts.length > 1) L.polyline(pts, { color: DAY_COLORS[(d - 1) % DAY_COLORS.length], weight: 3, opacity: 0.85 }).addTo(m);
+      for (const p of pts) L.circleMarker(p, { radius: 4, color: "#fff", weight: 1.5, fillColor: DAY_COLORS[(d - 1) % DAY_COLORS.length], fillOpacity: 1 }).addTo(m);
+    }
+    if (all.length) m.fitBounds(L.latLngBounds(all).pad(0.15)); else m.setView([20, 0], 2);
+  }, 60);
+
+  // crew + money arrive async; the recap doesn't wait for them
+  let shareMoney = "";
+  (async () => {
+    const [expRes, memRes] = await Promise.all([
+      sb.from("trip_expenses").select("amount,paid_by").eq("trip_id", trip.id),
+      sb.rpc("jj_trip_members", { t: trip.id }),
+    ]);
+    const members = (memRes && memRes.data) || [];
+    const crewEl = $("recap-crew");
+    if (crewEl && members.length) crewEl.textContent = ` · crew of ${members.length}`;
+    const exps = (expRes && expRes.data) || [];
+    if (exps.length) {
+      const ids = [...new Set([...members.map(mm => mm.user_id), ...exps.map(e => e.paid_by)])];
+      const total = exps.reduce((a, e) => a + Number(e.amount), 0);
+      const spentEl = $("recap-spent");
+      if (spentEl) { spentEl.style.display = ""; spentEl.querySelector("b").textContent = money(total); }
+      shareMoney = `\nTotal spent: ${money(total)}${ids.length > 1 ? ` (${money(total / ids.length)} each)` : ""}`;
+    }
+  })();
+
+  (async () => {
+    await ensurePhotoUrls();
+    const grid = $("recap-photos");
+    if (!grid) return;
+    grid.innerHTML = (state.photos || []).map(p => photoUrlCache[p.path] ? `<img data-ph="${esc(p.id)}" src="${photoUrlCache[p.path]}" alt="trip photo" loading="lazy">` : "").join("");
+    for (const im of grid.querySelectorAll("img")) {
+      im.onclick = () => { const p = state.photos.find(x => x.id === im.dataset.ph); if (p) showPhoto(p); };
+    }
+  })();
+
+  $("recap-share").onclick = async () => {
+    const text = `🏁 ${trip.name}${trip.destination ? ` — ${trip.destination}` : ""}\n` +
+      `${dayCount} days · ${visited.length}/${planned.length} stops visited` +
+      `${km > 0 ? ` · ${kmLabel} km between stops` : ""}` +
+      `${(state.photos || []).length ? ` · ${state.photos.length} photos` : ""}` +
+      shareMoney +
+      `\nPlanned with Jot & Trot · https://jotandtrot.com`;
+    const C = window.Capacitor;
+    if (C && C.isNativePlatform && C.isNativePlatform()) {
+      try { await nativeCall("Share", "share", { text }); return; } catch (e) {}
+    }
+    if (navigator.share) { try { await navigator.share({ text }); return; } catch (e) { if (e && e.name === "AbortError") return; } }
+    try { await navigator.clipboard.writeText(text); toast("Recap copied — paste it anywhere"); }
+    catch (e) { toast("Couldn't share on this device"); }
   };
 }
 

@@ -72,7 +72,7 @@ Three tracks, roughly in priority order within each. Suggested first picks: Live
 
 **Growth & stickiness:**
 
-4. **Post-trip memories / trip recap** — a recap view built from data we already collect (visited check-offs, photos per stop, expenses): map of everywhere you went, photo highlights, final costs. Gives the app a life after the trip and is inherently shareable — every recap markets the app.
+4. **Post-trip memories / trip recap** — ✅ built 10 Aug 2026. Once the trip's end date passes, a "🏁 Trip complete" banner opens the recap: stat tiles (days, stops visited, km between stops, photo count, total spent), a mini-map drawing each day's route in the day's color, a day-by-day rundown, and the trip's photo wall. Share button sends a text summary (native share sheet on iOS, system share or clipboard on web) ending "Planned with Jot & Trot · jotandtrot.com". Smoke-tested with Playwright against the jj-shot demo trip. Possible later polish: shareable recap *image* card.
 5. **Read-only public itinerary link** — share "here's our Tokyo plan" with someone who isn't joining the trip. Cheap on the web app; every share is an ad.
 6. **Calendar export** — push the trip schedule to Apple/Google Calendar so the plan appears where people already look.
 7. **Trip templates / cloning** — "copy this trip" for annual trips or reusing a friend's itinerary.
