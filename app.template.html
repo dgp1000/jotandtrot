@@ -3910,7 +3910,15 @@ async function runAutoPlan(live, ideas, dayCount) {
   // arrival/departure days hold proportionally less (a 14:30 landing is not a full day)
   const capFor = {};
   for (let dd = 1; dd <= dayCount; dd++) capFor[dd] = Math.max(dayWindowMin(dd) > 0 ? 1 : 0, Math.round(cap * dayWindowMin(dd) / 600));
-  let d = 1, lastDay = 1;
+  // a day that's already time-full takes nothing more: existing stops + travel
+  // measured against the day's usable window
+  for (let dd = 1; dd <= dayCount; dd++) {
+    const existing = state.stops.filter(s => s.day_index === dd);
+    const t = dayTravel(dd);
+    const mins = existing.reduce((a, s) => a + stopDwellMin(s), 0) + (t && t.totalMin ? t.totalMin : 0);
+    if (mins >= dayWindowMin(dd) * 0.8) load[dd] = Math.max(load[dd], capFor[dd]);
+  }
+  let d = 1, lastDay = 1, skippedFull = 0;
   const newRows = [], moves = [], suggIds = [];
   for (const it of ordered) {
     while (d < dayCount && load[d] >= capFor[d]) d++;
@@ -3930,6 +3938,14 @@ async function runAutoPlan(live, ideas, dayCount) {
       for (let dd = 1; dd <= dayCount; dd++) {
         if (dd !== target && load[dd] <= capFor[dd] && !badDay(dd)) { target = dd; break; }
       }
+    }
+    // no room on the chosen day? find one with space — and if every eligible day
+    // is full, leave the item in ideas/suggestions rather than overstuff a day
+    if (load[target] >= capFor[target]) {
+      let found = null;
+      for (let dd = 1; dd <= dayCount; dd++) if (load[dd] < capFor[dd] && !badDay(dd)) { found = dd; break; }
+      if (found == null) { skippedFull++; continue; }
+      target = found;
     }
     lastDay = Math.max(lastDay, target);
     const orderIndex = load[target]++;
@@ -4000,7 +4016,8 @@ async function runAutoPlan(live, ideas, dayCount) {
   if (bad) { console.error(bad.error); toast("Couldn't build the schedule — try again"); return; }
   await reloadTripData();
   setTab("itin");
-  toast(`⚡ Scheduled ${ordered.length} ideas across ${lastDay} day${lastDay > 1 ? "s" : ""}`);
+  const placed = ordered.length - skippedFull;
+  toast(`⚡ Scheduled ${placed} idea${placed === 1 ? "" : "s"} across ${lastDay} day${lastDay > 1 ? "s" : ""}${skippedFull ? ` · ${skippedFull} left aside — the days are full` : ""}`);
 }
 
 /* ---------- auth ---------- */
