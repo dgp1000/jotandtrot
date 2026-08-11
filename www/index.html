@@ -2612,6 +2612,17 @@ function openStopForm(pre, existing = null) {
     const endDay = isLodge && dayIndex >= 1
       ? Math.min(Math.max(parseInt($("m-sout").value, 10) || dayCount, Math.min(dayIndex + 1, dayCount)), dayCount)
       : null;
+    // one hotel at a time: a stay's nights may not overlap another stay's
+    if (isLodge && dayIndex >= 1) {
+      const newOut = Math.max(endDay || dayIndex + 1, dayIndex + 1);
+      const clash = state.stops.find(o => o.category === "lodging" && o.day_index >= 1 &&
+        o.id !== (existing && existing.id) &&
+        dayIndex < Math.max(o.end_day || o.day_index + 1, o.day_index + 1) && o.day_index < newOut);
+      if (clash) {
+        toast(`One hotel at a time — you're at ${clash.name} Day ${clash.day_index}–${Math.max(clash.end_day || clash.day_index + 1, clash.day_index + 1)}. Adjust that stay first.`);
+        return;
+      }
+    }
     const patch = {
       name,
       category: $("m-scat").value,
@@ -2991,7 +3002,7 @@ function renderItinerary() {
     }
     // ongoing hotel stays: show on every day after check-in, through check-out
     if (d > 0) for (const L of state.stops) {
-      if (L.category !== "lodging" || L.day_index < 1 || L.day_index >= d) continue;
+      if (L.category !== "lodging" || L.day_index < 1 || L.day_index > d) continue; // check-in day shows "night 1" too
       const out = Math.max(L.end_day || L.day_index + 1, L.day_index + 1);
       if (d > out) continue;
       const chip = document.createElement("div");
@@ -3931,15 +3942,41 @@ async function runAutoPlan(live, ideas, dayCount) {
     }
   }
 
-  // hotels are stays: each checks out when the next one checks in; the last checks out on the final day
-  const lodgeRows = newRows.filter(r => r.category === "lodging").sort((a, b) => a.day_index - b.day_index);
-  for (let i = 0; i < lodgeRows.length; i++) {
-    const next = lodgeRows[i + 1];
-    lodgeRows[i].end_day = next ? Math.max(next.day_index, lodgeRows[i].day_index + 1) : dayCount;
-    if (lodgeRows[i].end_day < lodgeRows[i].day_index) lodgeRows[i].end_day = lodgeRows[i].day_index;
+  // hotels are stays, and you can only stay in one at a time: chain across BOTH
+  // existing scheduled stays and new ones — each checks out when the next checks
+  // in, the last on the final day. New check-ins that land on an occupied day or
+  // on the final day (a zero-night stay) are dropped; existing stays are only
+  // ever shortened to resolve an overlap, never extended.
+  const stayList = [];
+  for (const s of state.stops) if (s.category === "lodging" && s.day_index >= 1 && !moves.some(m => m.id === s.id)) stayList.push({ kind: "existing", ref: s, day: s.day_index });
+  for (const m of moves) if (m.end_day != null) stayList.push({ kind: "move", ref: m, day: m.day_index });
+  for (const r of newRows) if (r.category === "lodging") stayList.push({ kind: "new", ref: r, day: r.day_index });
+  stayList.sort((a, b) => a.day - b.day || (a.kind === "existing" ? -1 : 1));
+  const keptStays = [], stayUpdates = [];
+  for (const st of stayList) {
+    const dupDay = keptStays.length && keptStays[keptStays.length - 1].day === st.day;
+    const zeroNight = st.day >= dayCount;
+    if ((dupDay || zeroNight) && st.kind !== "existing") {
+      if (st.kind === "new") newRows.splice(newRows.indexOf(st.ref), 1);
+      else moves.splice(moves.indexOf(st.ref), 1); // leave that lodging idea in 💡 Ideas
+      continue;
+    }
+    keptStays.push(st);
+  }
+  for (let i = 0; i < keptStays.length; i++) {
+    const st = keptStays[i];
+    let end = keptStays[i + 1] ? Math.min(dayCount, Math.max(keptStays[i + 1].day, st.day + 1)) : dayCount;
+    if (st.kind === "existing") {
+      const cur = Math.max(st.ref.end_day || st.day + 1, st.day + 1);
+      end = Math.min(cur, end);
+      if (end !== cur) stayUpdates.push({ id: st.ref.id, end_day: end });
+    } else {
+      st.ref.end_day = Math.max(end, st.day + 1);
+    }
   }
 
   const ops = [];
+  for (const u of stayUpdates) ops.push(sb.from("trip_stops").update({ end_day: u.end_day }).eq("id", u.id));
   if (newRows.length) ops.push(sb.from("trip_stops").insert(newRows));
   for (const m of moves) ops.push(sb.from("trip_stops").update({ day_index: m.day_index, order_index: m.order_index, ...(m.end_day ? { end_day: m.end_day } : {}) }).eq("id", m.id));
   if (suggIds.length) ops.push(sb.from("trip_suggestions").update({ status: "added" }).in("id", suggIds));
