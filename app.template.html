@@ -2537,6 +2537,14 @@ function openStopForm(pre, existing = null) {
     <div class="field-row">
       <div class="field"><label id="m-stime1-label">Time (optional)</label><input id="m-stime1" type="time" value="${existing && existing.start_time ? existing.start_time.slice(0, 5) : ""}"></div>
       <div class="field"><label id="m-stime2-label">Until</label><input id="m-stime2" type="time" value="${existing && existing.end_time ? existing.end_time.slice(0, 5) : ""}"></div>
+      <div class="field"><label>How long?</label><select id="m-sdur">
+        <option value="">Typical</option>
+        <option value="30">Quick (~30m)</option>
+        <option value="60">~1 hour</option>
+        <option value="120">~2 hours</option>
+        <option value="240">Half day</option>
+        <option value="480">Full day</option>
+      </select></div>
     </div>
     <div class="field-row">
       <div class="field"><label>Cost (${esc((state.trip && state.trip.currency) || "USD")}, optional)</label><input id="m-scost" type="number" min="0" step="any" value="${existing && existing.cost != null ? existing.cost : (pre && pre.cost != null ? pre.cost : "")}" placeholder="0"></div>
@@ -2548,6 +2556,7 @@ function openStopForm(pre, existing = null) {
       <button class="btn primary" id="m-ssave">${existing ? "Save" : "Add stop"}</button>
     </div>`);
   if (window.innerWidth > 820) $("m-sname").focus();
+  if (existing && existing.duration_min > 0) $("m-sdur").value = [30, 60, 120, 240, 480].includes(existing.duration_min) ? String(existing.duration_min) : "";
 
   // transit gets depart/arrive labels; everything else a generic time range
   const syncTimeLabels = () => {
@@ -2613,6 +2622,7 @@ function openStopForm(pre, existing = null) {
       cost: costRaw === "" ? null : Math.max(0, parseFloat(costRaw) || 0),
       start_time: $("m-stime1").value || null,
       end_time: $("m-stime2").value || null,
+      duration_min: parseInt($("m-sdur").value, 10) || null,
     };
     if (existing) {
       if (dayIndex !== existing.day_index) {
@@ -2865,7 +2875,7 @@ function renderItinerary() {
     if (dayTotal > 0) anyCost = true;
     const travel = d > 0 ? dayTravel(d) : null;
     const routable = d > 0 ? routableStops(d) : [];
-    const dwellMin = d > 0 ? stops.reduce((a, s2) => a + (DWELL_MIN[s2.category] != null ? DWELL_MIN[s2.category] : 60), 0) : 0;
+    const dwellMin = d > 0 ? stops.reduce((a, s2) => a + stopDwellMin(s2), 0) : 0;
     const loadMin = dwellMin + (travel ? travel.totalMin : 0);
     const winMin = d > 0 ? dayWindowMin(d) : 600;
     const loadStr = d > 0 && travel && loadMin >= 120
@@ -2917,10 +2927,13 @@ function renderItinerary() {
         ? `<span class="cost-chip time-chip">${s.category === "transit"
             ? `${s.start_time ? "dep " + fmtClock(s.start_time) : ""}${s.start_time && s.end_time ? " → " : ""}${s.end_time ? "arr " + fmtClock(s.end_time) : ""}`
             : `${fmtClock(s.start_time) || "…"}${s.end_time ? "–" + fmtClock(s.end_time) : ""}`}</span>` : "";
+      const dwell = d > 0 && s.category !== "lodging" ? stopDwellMin(s) : 0;
+      const durChip = dwell >= 240 && !(s.start_time && s.end_time)
+        ? `<span class="cost-chip time-chip" title="Plan around it — this one takes a while">⏳ ${dwell >= 420 ? "full day" : "half day"}</span>` : "";
       card.innerHTML = `
         <div class="stop-num ${d > 0 ? "checkable" : ""} ${s.visited_at ? "checked" : ""}" title="${d > 0 ? (s.visited_at ? "Visited — tap to undo" : "Tap to mark visited") : ""}" style="background:${cat.color}">${s.visited_at ? "✓" : d === 0 ? "★" : num}</div>
         <div class="stop-body">
-          <div class="stop-name">${cat.emoji} ${esc(s.name)}${newChip}${timeChip}${costChip}${stayChip}${closedChip}</div>
+          <div class="stop-name">${cat.emoji} ${esc(s.name)}${newChip}${timeChip}${durChip}${costChip}${stayChip}${closedChip}</div>
           ${s.address ? `<div class="stop-addr">${esc(s.address)}</div>` : ""}
           ${s.notes ? `<div class="stop-notes">${linkify(esc(s.notes))}</div>` : ""}
           ${stopPhotos(s.id).length ? `<div class="stop-photos">${stopPhotos(s.id).map(p => `<img data-ph="${esc(p.id)}" src="${photoUrlCache[p.path] || ""}" alt="photo" loading="lazy">`).join("")}</div>` : ""}
@@ -3670,6 +3683,16 @@ async function showTripRecap() {
 
 /* ---------- travel times between stops (Geoapify routing) ---------- */
 const DWELL_MIN = { sight: 90, food: 75, activity: 120, transit: 30, lodging: 0, other: 60 };
+/* places that plainly eat a whole day, even if nobody set a duration */
+const FULL_DAY_RX = /theme ?park|amusement|disney|universal studios|legoland|six flags|birdworld|zoo\b|safari|water ?park|epcot|magic kingdom|alton towers|thorpe park|chessington|paulton|efteling|europa[- ]?park|port ?aventura/i;
+/* how long a stop really takes: explicit setting > clock times > name heuristic > category default */
+function stopDwellMin(s) {
+  if (s.duration_min > 0) return s.duration_min;
+  const st = toMinT(s.start_time), en = toMinT(s.end_time);
+  if (st != null && en != null && en > st) return en - st;
+  if (s.category !== "lodging" && s.category !== "transit" && s.category !== "food" && FULL_DAY_RX.test(s.name || "")) return 480;
+  return DWELL_MIN[s.category] != null ? DWELL_MIN[s.category] : 60;
+}
 const travelCache = {}; // route key -> {legs, totalMin} | "pending" | "none"
 function fmtMin(m) {
   const h = Math.floor(m / 60);
@@ -3896,7 +3919,13 @@ async function runAutoPlan(live, ideas, dayCount) {
     let target = d;
     const hrs = it.sugg ? it.sugg.hours : it.stop ? it.stop.hours : null;
     const sensitive = weatherSensitive(it.sugg ? it.sugg.name : it.stop.name, it.kind);
-    const badDay = dd => (hrs && closedOnDay(hrs, state.trip, dd)) || (sensitive && rainyDay(dd));
+    // full-day places (theme parks, zoos, explicit "full day") want a day of their own
+    const itemDwell = it.stop ? stopDwellMin(it.stop)
+      : (it.kind !== "food" && it.kind !== "lodging" && FULL_DAY_RX.test(it.sugg.name || "")) ? 480
+      : (DWELL_MIN[it.kind] != null ? DWELL_MIN[it.kind] : 60);
+    const big = itemDwell >= 300;
+    const badDay = dd => (hrs && closedOnDay(hrs, state.trip, dd)) || (sensitive && rainyDay(dd)) ||
+      (big && (load[dd] > 0 || dayWindowMin(dd) < Math.min(itemDwell, 480) * 0.8));
     if (badDay(target)) {
       for (let dd = 1; dd <= dayCount; dd++) {
         if (dd !== target && load[dd] <= capFor[dd] && !badDay(dd)) { target = dd; break; }
@@ -3904,6 +3933,7 @@ async function runAutoPlan(live, ideas, dayCount) {
     }
     lastDay = Math.max(lastDay, target);
     const orderIndex = load[target]++;
+    if (big) load[target] = Math.max(load[target], capFor[target]); // the day is spoken for
     if (it.stop) {
       const mv = { id: it.stop.id, day_index: target, order_index: orderIndex };
       if (it.kind === "lodging") mv.end_day = dayCount; // your own hotel idea: stay through the last day

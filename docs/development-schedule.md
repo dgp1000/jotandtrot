@@ -100,6 +100,8 @@ Theme: you always know what the crew did. All web-side — no new iOS build need
 
 7. **Weather-aware planning** — ✅ built 10 Aug 2026. The per-day forecast (already fetched) now marks wet days (WMO code ≥51). ⚡ Auto-build steers weather-sensitive stops (sights/activities whose names don't read indoor — museum/gallery/church/market/etc.) away from rainy days, same mechanism as closed-day steering; indoor stops fill them instead. Rainy days holding outdoor stops get a gentle blue note ("🌧️ Rain likely — 'Alfama walking tour' is weather-sensitive; Days 1, 3 look drier"). Forecast horizon is Open-Meteo's 16 days; beyond it, planning behaves as before.
 
+8. **Stop durations** — ✅ built 11 Aug 2026. "How long?" on every stop (quick/1h/2h/half day/full day; typical = category default), clock times imply duration, and obvious full-day places (theme parks, zoos, Disney/Birdworld-class names — never food/lodging/transit) default to a full day via a name heuristic. Day-load estimates and overpacked warnings use the real numbers; ⏳ half-day/full-day chips appear on cards; ⚡ auto-build gives ≥5h stops a day of their own (empty, unpinched by travel times) and closes that day to more stops. Multi-day attractions (3 days at Disney World) stay v2 — the pattern for now is one full-day stop per day.
+
 ## Ongoing throughout
 
 - TestFlight builds to the crew at the end of each phase
