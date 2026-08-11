@@ -1397,7 +1397,7 @@ function calendarEventsForTrip() {
     if (L.category !== "lodging" || L.day_index < 1) continue;
     const date = dayISO(trip, L.day_index);
     const out2 = Math.max(L.end_day || L.day_index + 1, L.day_index + 1);
-    if (date) out.push({ title: `🛏️ ${L.name}`, date, days: out2 - L.day_index, notes: `${trip.name} — through ${dayDate(trip, out2)}` });
+    if (date) out.push({ title: `🛏️ ${L.name}`, date, days: out2 - L.day_index, notes: `${trip.name} — check out ${dayDate(trip, out2)} by noon` });
   }
   return out;
 }
@@ -2988,11 +2988,15 @@ function renderItinerary() {
       if (d > out) continue;
       const chip = document.createElement("div");
       chip.className = "staying-chip";
-      chip.innerHTML = d === out
-        ? `🧳 <b>Check out</b> of ${esc(L.name)}`
-        : `🛏️ Staying at ${esc(L.name)} <span class="staying-night">night ${d - L.day_index + 1}${L.cost != null ? " · " + money(L.cost) : ""}</span>`;
       chip.onclick = () => highlightStop(L.id, true);
-      section.appendChild(chip);
+      if (d === out) {
+        // check-out is a morning affair — it leads the day, before the stops
+        chip.innerHTML = `🧳 <b>Check out</b> of ${esc(L.name)} <span class="staying-night">by noon</span>`;
+        section.insertBefore(chip, section.children[1] || null);
+      } else {
+        chip.innerHTML = `🛏️ Staying at ${esc(L.name)} <span class="staying-night">night ${d - L.day_index + 1}${L.cost != null ? " · " + money(L.cost) : ""}</span>`;
+        section.appendChild(chip);
+      }
     }
     wrap.appendChild(section);
   }
