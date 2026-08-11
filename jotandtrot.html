@@ -941,8 +941,11 @@ function showCreateTrip(existing = null) {
       <div class="field"><label>Start date</label><input id="m-start" type="date"></div>
       <div class="field"><label>End date</label><input id="m-end" type="date"></div>
     </div>
-    <div class="field" style="max-width:140px"><label>Budget currency</label>
-      <select id="m-currency">${Object.keys(CURRENCY_SYMBOLS).map(c => `<option ${c === "USD" ? "selected" : ""}>${c}</option>`).join("")}</select>
+    <div class="field-row">
+      <div class="field" style="max-width:140px"><label>Budget currency</label>
+        <select id="m-currency">${Object.keys(CURRENCY_SYMBOLS).map(c => `<option ${c === "USD" ? "selected" : ""}>${c}</option>`).join("")}</select>
+      </div>
+      <div class="field"><label>Budget target (optional)</label><input id="m-budget" type="number" min="0" step="any" placeholder="e.g. 2500"></div>
     </div>
     <div class="modal-actions">
       ${existing ? `<button class="btn" id="m-clone" style="margin-right:auto" title="New trip with the same stops and days — no votes, photos, or history">⧉ Duplicate</button>` : ""}
@@ -955,6 +958,7 @@ function showCreateTrip(existing = null) {
     $("m-start").value = existing.start_date || "";
     $("m-end").value = existing.end_date || "";
     $("m-currency").value = existing.currency || "USD";
+    $("m-budget").value = existing.budget != null ? existing.budget : "";
     $("m-clone").onclick = () => cloneTrip(existing);
   }
   $("m-name").focus();
@@ -1012,6 +1016,7 @@ function showCreateTrip(existing = null) {
         start_date: $("m-start").value || null,
         end_date: $("m-end").value || null,
         currency: $("m-currency").value,
+        budget: $("m-budget").value.trim() === "" ? null : Math.max(0, parseFloat($("m-budget").value) || 0),
       };
       if (destChanged) {
         patch.dest_lat = chosenDest ? chosenDest.lat : null;
@@ -1039,6 +1044,7 @@ function showCreateTrip(existing = null) {
       start_date: $("m-start").value || null,
       end_date: $("m-end").value || null,
       currency: $("m-currency").value,
+      budget: $("m-budget").value.trim() === "" ? null : Math.max(0, parseFloat($("m-budget").value) || 0),
       dest_lat: chosenDest ? chosenDest.lat : null,
       dest_lng: chosenDest ? chosenDest.lng : null,
       dest_bbox: chosenDest ? chosenDest.bbox : null,
@@ -2987,11 +2993,22 @@ function renderItinerary() {
     wrap.appendChild(section);
   }
 
-  if (anyCost) {
+  if (anyCost || state.trip.budget > 0) {
+    const grand = tripTotal + state.stops.filter(s => s.day_index === 0).reduce((a, s) => a + (s.cost || 0), 0);
+    const budget = state.trip.budget > 0 ? Number(state.trip.budget) : null;
+    const over = budget != null && grand > budget;
+    const close = budget != null && !over && grand > budget * 0.9;
     const totalEl = document.createElement("div");
     totalEl.className = "trip-total";
-    totalEl.innerHTML = `<span>Trip budget so far</span><b>${money(tripTotal + state.stops.filter(s => s.day_index === 0).reduce((a, s) => a + (s.cost || 0), 0))}</b>`;
+    totalEl.innerHTML = `<span>Trip budget so far</span>
+      <b style="${over ? "color:#c0392b" : close ? "color:#b06a00" : ""}">${money(grand)}${budget != null ? ` / ${money(budget)}` : ""}</b>`;
     wrap.appendChild(totalEl);
+    if (over) {
+      const warn = document.createElement("div");
+      warn.className = "day-warn";
+      warn.innerHTML = `⚠️ The plan is <b>${money(grand - budget)}</b> over the ${money(budget)} target. Trim a cost or raise the budget in ✏️ Edit.`;
+      wrap.appendChild(warn);
+    }
   }
 
   const footer = document.createElement("div");

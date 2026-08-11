@@ -96,6 +96,8 @@ Theme: you always know what the crew did. All web-side — no new iOS build need
 
 5. **Flights & arrival times** — ✅ built 10 Aug 2026. Any stop can now carry optional clock times (start/end): 🚆 transit stops read "dep 11:10 → arr 14:30", other stops "19:30" or "19:30–21:00" (dinner reservations, timed entries). The schedule is aware of them: arrival/departure days shrink their usable window (14:30 landing → ~7h day), the overpacked warning and day-load chip use it ("≈ 9h / 7h"), and auto-plan assigns proportionally fewer stops to pinched days. Today view + lock-screen Live Activity show "departs 11:10"/"arrives 14:30"; calendar export uses exact times (minute-precise, .ics and EventKit) instead of slot guesses; times show on the public /plan view too. Untimed stops behave exactly as before.
 
+6. **Budget target** — ✅ built 10 Aug 2026. Optional trip-level target (trip_trips.budget, set in ✏️ Edit next to the currency). The itinerary's "Trip budget so far" line becomes "€146 / €500"; amber past 90%, red + "⚠️ €46 over the €100 target" warning when the plan exceeds it. Targets copy with ⧉ Duplicate.
+
 ## Ongoing throughout
 
 - TestFlight builds to the crew at the end of each phase
