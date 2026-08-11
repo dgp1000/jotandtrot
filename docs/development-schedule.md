@@ -98,6 +98,8 @@ Theme: you always know what the crew did. All web-side — no new iOS build need
 
 6. **Budget target** — ✅ built 10 Aug 2026. Optional trip-level target (trip_trips.budget, set in ✏️ Edit next to the currency). The itinerary's "Trip budget so far" line becomes "€146 / €500"; amber past 90%, red + "⚠️ €46 over the €100 target" warning when the plan exceeds it. Targets copy with ⧉ Duplicate.
 
+7. **Weather-aware planning** — ✅ built 10 Aug 2026. The per-day forecast (already fetched) now marks wet days (WMO code ≥51). ⚡ Auto-build steers weather-sensitive stops (sights/activities whose names don't read indoor — museum/gallery/church/market/etc.) away from rainy days, same mechanism as closed-day steering; indoor stops fill them instead. Rainy days holding outdoor stops get a gentle blue note ("🌧️ Rain likely — 'Alfama walking tour' is weather-sensitive; Days 1, 3 look drier"). Forecast horizon is Open-Meteo's 16 days; beyond it, planning behaves as before.
+
 ## Ongoing throughout
 
 - TestFlight builds to the crew at the end of each phase

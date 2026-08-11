@@ -2867,6 +2867,14 @@ function renderItinerary() {
     if (travel && loadMin > winMin) {
       section.innerHTML += `<div class="day-warn">⚠️ Roughly ${fmtMin(loadMin)} of stops and travel${winMin < 600 ? ` but your travel times leave only ~${fmtMin(winMin)} of usable day` : " — more than fits a comfortable day"}. Maybe move something to another day?</div>`;
     }
+    if (d > 0 && rainyDay(d)) {
+      const wet = stops.filter(s => weatherSensitive(s.name, s.category));
+      if (wet.length) {
+        const dry = [];
+        for (let dd = 1; dd <= dayCount; dd++) if (dd !== d && !rainyDay(dd) && state.weather && state.weather[dayISO(state.trip, dd)]) dry.push(dd);
+        section.innerHTML += `<div class="day-warn" style="background:#eef3f8;border-color:#cfe0ee;color:#33586e">🌧️ Rain likely — ${wet.length === 1 ? `“${esc(wet[0].name)}” is` : `${wet.length} outdoor stops are`} weather-sensitive${dry.length ? `; Day${dry.length > 1 ? "s" : ""} ${dry.slice(0, 3).join(", ")} look${dry.length === 1 ? "s" : ""} drier` : ""}.</div>`;
+      }
+    }
     section.addEventListener("dragover", (e) => sectionDragOver(e, section));
     section.addEventListener("drop", (e) => sectionDrop(e, d));
     let num = 0, lastSlotShown = null;
@@ -3719,11 +3727,22 @@ async function loadWeather() {
       const code = j.daily.weather_code[i];
       let emoji = "☁️";
       for (const [c, e] of WX_EMOJI) if (code >= c) emoji = e;
-      wx[iso] = { emoji, max: Math.round(j.daily.temperature_2m_max[i]) };
+      wx[iso] = { emoji, max: Math.round(j.daily.temperature_2m_max[i]), wet: code >= 51 }; // WMO 51+: drizzle, rain, snow, storms
     });
     if (state.trip && state.trip.id === t.id) { state.weather = wx; renderItinerary(); }
   } catch (e) { /* forecast is a nicety — never block the plan */ }
 }
+/* rain-aware planning: which days are wet, and which stops mind the rain */
+function rainyDay(d) {
+  const wx = state.weather && state.weather[dayISO(state.trip, d)];
+  return !!(wx && wx.wet);
+}
+const INDOOR_RX = /museum|gallery|aquarium|theat(re|er)|cinema|church|cathedral|basilica|monastery|palace|castle|market|mall|library|studio|hall/i;
+function weatherSensitive(name, kind) {
+  if (kind === "food" || kind === "lodging" || kind === "transit") return false;
+  return !INDOOR_RX.test(name || "");
+}
+
 function scrollToToday() {
   const d = todayDayIndex(state.trip);
   if (!d) return;
@@ -3770,7 +3789,7 @@ function autoPlan() {
       This will slot ${bits.join(", ")} into your <b>${dayCount}-day</b> schedule —
       grouped by area so you're not zig-zagging, meals spaced between sights, and each
       area's hotel checked in on its first day, staying through until the next hotel —
-      the last one checks out on your final day.</p>
+      the last one checks out on your final day.${state.weather ? " Days with rain in the forecast get the indoor stops; parks and walks go where it's dry." : ""}</p>
     <p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 4px">
       Stops already on the schedule stay exactly where they are, and you can drag anything
       afterwards. Extra hotels stay in Suggestions.</p>
@@ -3853,12 +3872,15 @@ async function runAutoPlan(live, ideas, dayCount) {
   const newRows = [], moves = [], suggIds = [];
   for (const it of ordered) {
     while (d < dayCount && load[d] >= capFor[d]) d++;
-    // avoid dropping a stop on a weekday its opening hours say it's closed
+    // avoid dropping a stop on a weekday its opening hours say it's closed,
+    // and keep rain-sensitive stops (parks, walks, viewpoints) off wet days
     let target = d;
     const hrs = it.sugg ? it.sugg.hours : it.stop ? it.stop.hours : null;
-    if (hrs && closedOnDay(hrs, state.trip, target)) {
+    const sensitive = weatherSensitive(it.sugg ? it.sugg.name : it.stop.name, it.kind);
+    const badDay = dd => (hrs && closedOnDay(hrs, state.trip, dd)) || (sensitive && rainyDay(dd));
+    if (badDay(target)) {
       for (let dd = 1; dd <= dayCount; dd++) {
-        if (dd !== target && load[dd] <= cap && !closedOnDay(hrs, state.trip, dd)) { target = dd; break; }
+        if (dd !== target && load[dd] <= capFor[dd] && !badDay(dd)) { target = dd; break; }
       }
     }
     lastDay = Math.max(lastDay, target);
