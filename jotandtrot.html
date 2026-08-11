@@ -94,9 +94,12 @@ header {
   white-space: nowrap;
 }
 .logo .compass { font-size: 20px; }
+/* the trip name/dates yield space to the buttons: one line, ellipsized, never overlapping */
+#header-trip-info { flex: 0 1 auto; min-width: 160px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 #header-trip-name { font-weight: 600; font-size: 15px; }
 #header-trip-dates { color: var(--ink-soft); font-size: 13px; }
 .header-spacer { flex: 1; }
+header .btn, header .logo { flex-shrink: 0; white-space: nowrap; }
 .btn {
   border: 1px solid var(--line);
   background: var(--panel);
@@ -241,8 +244,9 @@ body.public-view #scout-btn, body.public-view #suggestions { display: none !impo
 /* iPad portrait & narrow wide-modes: slimmer plan so the map keeps room */
 @media (min-width: 701px) and (max-width: 1000px) { #sidebar { width: 360px; min-width: 320px; } }
 
-/* ===== compact header (phones + iPad portrait) ===== */
-@media (max-width: 900px) {
+/* ===== compact header (phones, iPads, and narrow desktop windows —
+       the wide single-row header needs ~1320px for all its buttons) ===== */
+@media (max-width: 1320px) {
   header {
     height: auto; min-height: 48px; flex-wrap: nowrap; gap: 8px; padding: 6px 10px;
     padding-top: calc(6px + env(safe-area-inset-top));
