@@ -100,7 +100,9 @@ Theme: you always know what the crew did. All web-side — no new iOS build need
 
 ## Deferred / ideas parking lot
 
-Empty for now — Android, iPad layout, and lock-screen widgets / Live Activities graduated to Phase F above. (Expense splitting, photos & notes, time-of-day slots, and the web app graduated to Phase E earlier.)
+Pre-public-launch polish, deliberately skipped for now (10 Aug 2026): Google's consent screen says "continue to vlmqbskqyvutbrmhfvuv.supabase.co" — cosmetic only. Fix when strangers arrive: Supabase custom domain add-on ($10/mo, auth.jotandtrot.com CNAME + update the Google OAuth client redirect) and optionally Google brand verification (logo + Search Console) for full name/logo on the consent screen.
+
+Otherwise empty — Android, iPad layout, and lock-screen widgets / Live Activities graduated to Phase F above. (Expense splitting, photos & notes, time-of-day slots, and the web app graduated to Phase E earlier.)
 
 ## Rough cost picture at launch
 
