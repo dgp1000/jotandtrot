@@ -140,6 +140,19 @@ header {
 .home-hero { margin-bottom: 28px; }
 .home-hero h1 { font-size: 30px; letter-spacing: -0.03em; margin-bottom: 6px; }
 .home-hero p { color: var(--ink-soft); font-size: 15px; }
+/* public recap page */
+#recap-page { position: fixed; inset: 0; overflow-y: auto; background: var(--bg); z-index: 3000; }
+.rp-inner { max-width: 640px; margin: 0 auto; padding: 36px 20px calc(40px + env(safe-area-inset-bottom)); }
+.rp-hero { margin-bottom: 18px; }
+.rp-kicker { font-size: 12.5px; font-weight: 700; color: var(--teal); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+.rp-hero h1 { font-size: 28px; letter-spacing: -0.03em; margin-bottom: 4px; }
+.rp-sub { color: var(--ink-soft); font-size: 14px; }
+#rp-map { height: 280px; border-radius: 14px; margin-bottom: 16px; background: var(--line); }
+.rp-photos { margin-top: 18px; }
+.rp-photos img { cursor: default; }
+.rp-cta { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--line); text-align: center; font-size: 13.5px; color: var(--ink-soft); }
+.rp-cta a { color: var(--teal); text-decoration: none; }
+
 /* public view-only mode: the plan without the controls */
 body.public-view .search-wrap, body.public-view .side-tabs,
 body.public-view #scout-btn, body.public-view #suggestions { display: none !important; }
@@ -1548,6 +1561,97 @@ async function flushPendingJoin() {
   await loadTrips();
   openTrip(data);
 }
+/* ---------- public recap page (app.jotandtrot.com/recap/TOKEN) ---------- */
+let pendingRecapToken = null;
+function captureRecapUrl(url) {
+  try {
+    const m = new URL(url).pathname.match(/^\/recap\/([a-f0-9]+)\/?$/i);
+    if (m) pendingRecapToken = m[1].toLowerCase();
+    return !!m;
+  } catch (e) { return false; }
+}
+async function publicRecapView(tok) {
+  $("home-view").style.display = "none";
+  let data = null;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/functions/v1/recap-data?token=${tok}`);
+    if (r.ok) data = await r.json();
+  } catch (e) {}
+  if (!data || !data.trip) {
+    document.body.insertAdjacentHTML("beforeend",
+      `<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:30px;text-align:center;color:var(--ink-soft);font-size:15px">
+        This trip recap link is no longer active.&nbsp;<a href="https://jotandtrot.com" style="color:var(--teal)">Jot & Trot</a></div>`);
+    return;
+  }
+  state.trip = data.trip; // money() reads the currency from here
+  const trip = data.trip;
+  const stops = data.stops || [];
+  const dayCount = Math.max(1, ...stops.map(s => s.day_index), trip.start_date && trip.end_date
+    ? Math.round((new Date(trip.end_date) - new Date(trip.start_date)) / 86400000) + 1 : 1);
+  const planned = stops.filter(s => s.day_index > 0);
+  const visited = planned.filter(s => s.visited_at);
+  let km = 0;
+  for (let d = 1; d <= dayCount; d++) {
+    const r = stops.filter(s => s.day_index === d && s.lat != null && s.category !== "lodging").sort((a, b) => a.order_index - b.order_index);
+    for (let i = 1; i < r.length; i++) km += haversineKm(r[i - 1], r[i]);
+  }
+  const kmLabel = km >= 10 ? Math.round(km) : Math.round(km * 10) / 10;
+  const dates = trip.start_date ? `${dayDate(trip, 1)} – ${dayDate(trip, dayCount)}` : "";
+
+  const dayRows = [];
+  for (let d = 1; d <= dayCount; d++) {
+    const ds = stops.filter(s => s.day_index === d).sort((a, b) => a.order_index - b.order_index);
+    if (!ds.length) continue;
+    dayRows.push(`<div class="recap-day">
+      <b>Day ${d}</b> · ${dayDate(trip, d)}
+      <div class="rd-stops">${ds.map(s => `${s.visited_at ? "✓ " : ""}${(CATEGORIES[s.category] || CATEGORIES.other).emoji} ${esc(s.name)}`).join("  ·  ")}</div>
+    </div>`);
+  }
+
+  document.body.insertAdjacentHTML("beforeend", `
+    <div id="recap-page">
+      <div class="rp-inner">
+        <div class="rp-hero">
+          <div class="rp-kicker">🏁 Trip recap</div>
+          <h1>${esc(trip.name)}</h1>
+          <div class="rp-sub">${esc(trip.destination || "")}${dates ? ` · ${dates}` : ""} · crew of ${data.crew}</div>
+        </div>
+        <div class="recap-stats">
+          <div class="recap-stat"><b>${dayCount}</b><span>days</span></div>
+          <div class="recap-stat"><b>${visited.length}/${planned.length}</b><span>stops visited</span></div>
+          ${km > 0 ? `<div class="recap-stat"><b>${kmLabel} km</b><span>between stops</span></div>` : ""}
+          ${(data.photos || []).length ? `<div class="recap-stat"><b>${data.photos.length}</b><span>photos</span></div>` : ""}
+          ${data.spentTotal > 0 ? `<div class="recap-stat"><b>${money(data.spentTotal)}</b><span>spent</span></div>` : ""}
+        </div>
+        <div id="rp-map"></div>
+        ${dayRows.join("")}
+        ${(data.photos || []).length ? `<div class="recap-photos rp-photos">${data.photos.map(u => `<img src="${esc(u)}" alt="trip photo" loading="lazy">`).join("")}</div>` : ""}
+        <div class="rp-cta">
+          Made with <a href="https://jotandtrot.com"><b>Jot & Trot</b></a> — plan trips on a live map, together with your crew.
+          <div style="margin-top:12px"><a class="btn primary" href="https://jotandtrot.com" style="display:inline-block">🧭 Plan your own trip</a></div>
+        </div>
+      </div>
+    </div>`);
+
+  const m = L.map("rp-map", { zoomControl: false, attributionControl: true, scrollWheelZoom: false });
+  (geoOn()
+    ? L.tileLayer(`https://maps.geoapify.com/v1/tile/osm-bright-smooth/{z}/{x}/{y}.png?apiKey=${GEO_KEY}`, { maxZoom: 19, attribution: 'Powered by <a href="https://www.geoapify.com/">Geoapify</a> © OpenStreetMap' })
+    : L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" })
+  ).addTo(m);
+  const all = [];
+  for (let d = 1; d <= dayCount; d++) {
+    const pts = stops.filter(s => s.day_index === d && s.lat != null && s.category !== "lodging")
+      .sort((a, b) => a.order_index - b.order_index).map(s => [s.lat, s.lng]);
+    all.push(...pts);
+    const color = DAY_COLORS[(d - 1) % DAY_COLORS.length];
+    if (pts.length > 1) L.polyline(pts, { color, weight: 3, opacity: 0.85 }).addTo(m);
+    for (const p of pts) L.circleMarker(p, { radius: 5, color: "#fff", weight: 1.5, fillColor: color, fillOpacity: 1 }).addTo(m);
+  }
+  if (all.length) m.fitBounds(L.latLngBounds(all).pad(0.15));
+  else if (trip.dest_lat != null) m.setView([trip.dest_lat, trip.dest_lng], 10);
+  document.title = `${trip.name} — trip recap`;
+}
+
 /* ---------- public view-only itinerary (app.jotandtrot.com/plan/TOKEN) ---------- */
 let pendingPublicToken = null;
 function capturePlanUrl(url) {
@@ -3364,8 +3468,10 @@ async function showTripRecap() {
     <div class="recap-photos" id="recap-photos"></div>
     <div class="modal-actions">
       <button class="btn" onclick="closeModal()">Close</button>
+      <button class="btn" id="recap-web" style="display:none">🌐 Web page</button>
       <button class="btn primary" id="recap-share">📤 Share</button>
-    </div>`, true);
+    </div>
+    <div id="recap-web-note" style="display:none;text-align:right;font-size:11.5px;color:var(--ink-soft);margin-top:6px"></div>`, true);
 
   // the route we actually trotted, day by day
   setTimeout(() => {
@@ -3419,12 +3525,49 @@ async function showTripRecap() {
     }
   })();
 
+  // the recap as a public web page: separate owner-controlled token, because
+  // the page shows photos and totals to anyone with the link
+  const iOwnTrip = state.user && trip.owner_id === state.user.id;
+  const recapUrl = () => trip.recap_slug ? `https://app.jotandtrot.com/recap/${trip.recap_slug}` : null;
+  const syncWebBits = () => {
+    const btn = $("recap-web"), note = $("recap-web-note");
+    if (!btn) return;
+    btn.style.display = (iOwnTrip || trip.recap_slug) ? "" : "none";
+    btn.textContent = trip.recap_slug ? "🌐 Copy page link" : "🌐 Make a web page";
+    if (note) {
+      note.style.display = trip.recap_slug && iOwnTrip ? "" : "none";
+      note.innerHTML = `anyone with the link sees this page — <a href="#" id="recap-web-off" style="color:#c0392b">turn it off</a>`;
+      const off = $("recap-web-off");
+      if (off) off.onclick = async (e) => {
+        e.preventDefault();
+        const { error } = await sb.rpc("jj_set_recap_link", { t: trip.id, enable: false });
+        if (error) { toast("Couldn't turn the page off"); return; }
+        trip.recap_slug = null;
+        toast("Recap page disabled");
+        syncWebBits();
+      };
+    }
+  };
+  syncWebBits();
+  const btnWeb = $("recap-web");
+  if (btnWeb) btnWeb.onclick = async () => {
+    if (!trip.recap_slug) {
+      const { data, error } = await sb.rpc("jj_set_recap_link", { t: trip.id, enable: true });
+      if (error || !data) { toast("Couldn't create the page"); console.error(error); return; }
+      trip.recap_slug = data;
+      syncWebBits();
+    }
+    try { await navigator.clipboard.writeText(recapUrl()); toast("🌐 Recap page link copied"); }
+    catch (e) { toast(recapUrl()); }
+  };
+
   $("recap-share").onclick = async () => {
     const text = `🏁 ${trip.name}${trip.destination ? ` — ${trip.destination}` : ""}\n` +
       `${dayCount} days · ${visited.length}/${planned.length} stops visited` +
       `${km > 0 ? ` · ${kmLabel} km between stops` : ""}` +
       `${(state.photos || []).length ? ` · ${state.photos.length} photos` : ""}` +
       shareMoney +
+      (trip.recap_slug ? `\nSee the trip: ${recapUrl()}` : "") +
       `\nPlanned with Jot & Trot · https://jotandtrot.com`;
     const C = window.Capacitor;
     if (C && C.isNativePlatform && C.isNativePlatform()) {
@@ -4003,6 +4146,7 @@ window.__ta = state; // debugging/testing handle
 (async () => {
   const C = window.Capacitor;
   const native = !!(C && C.isNativePlatform && C.isNativePlatform());
+  if (!native && captureRecapUrl(location.href)) { publicRecapView(pendingRecapToken); return; }
   if (!native && capturePlanUrl(location.href)) { publicTripView(pendingPublicToken); return; }
   const { data: { session } } = await sb.auth.getSession();
   if (session && session.user) onSignedIn(session.user);
