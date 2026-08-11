@@ -358,6 +358,7 @@ body.public-view #scout-btn, body.public-view #suggestions { display: none !impo
 .stop-card.visited { opacity: .55; }
 .stop-card.visited .stop-name { text-decoration: line-through; text-decoration-thickness: 1.5px; }
 .stop-num.checkable { cursor: pointer; }
+.time-chip { background: #eaf2f2 !important; color: var(--teal) !important; font-variant-numeric: tabular-nums; }
 .leg-row { margin: 2px 0 2px 46px; font-size: 12px; color: var(--ink-soft); padding-left: 10px; border-left: 2px dotted var(--ink-soft); opacity: .85; }
 .day-load { margin-left: 8px; font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
 .day-load.tight { color: #c0392b; font-weight: 700; }
@@ -1370,8 +1371,15 @@ function calendarEventsForTrip() {
     for (const s of stops) {
       const cat = CATEGORIES[s.category] || CATEGORIES.other;
       const ev = { title: `${cat.emoji} ${s.name}`, date, notes: [trip.name, s.notes || ""].filter(Boolean).join(" — ") };
+      const st = toMinT(s.start_time), en = toMinT(s.end_time);
       const hrs = s.slot && SLOT_HOURS[s.slot];
-      if (hrs) { ev.startHour = hrs[0]; ev.endHour = hrs[1]; }
+      if (st != null || en != null) {
+        // real clock times beat slot guesses; a lone arrival gets a 1h block ending at it
+        const startMin = st != null ? st : Math.max(0, en - 60);
+        const endMin = en != null && en > startMin ? en : Math.min(24 * 60 - 1, startMin + 90);
+        ev.startHour = Math.floor(startMin / 60); ev.startMinute = startMin % 60;
+        ev.endHour = Math.floor(endMin / 60); ev.endMinute = endMin % 60;
+      } else if (hrs) { ev.startHour = hrs[0]; ev.endHour = hrs[1]; }
       out.push(ev);
     }
   }
@@ -1404,8 +1412,8 @@ async function exportCalendar() {
     lines.push("BEGIN:VEVENT",
       `UID:jj-${state.trip.id}-${i}@jotandtrot.com`,
       `DTSTAMP:${dstr(e.date)}T000000Z`,
-      e.startHour != null ? `DTSTART:${dstr(e.date)}T${pad(e.startHour)}0000` : `DTSTART;VALUE=DATE:${dstr(e.date)}`,
-      e.startHour != null ? `DTEND:${dstr(e.date)}T${pad(e.endHour)}0000` : `DTEND;VALUE=DATE:${dstr(plusDays(e.date, e.days || 1))}`,
+      e.startHour != null ? `DTSTART:${dstr(e.date)}T${pad(e.startHour)}${pad(e.startMinute || 0)}00` : `DTSTART;VALUE=DATE:${dstr(e.date)}`,
+      e.startHour != null ? `DTEND:${dstr(e.date)}T${pad(e.endHour)}${pad(e.endMinute || 0)}00` : `DTEND;VALUE=DATE:${dstr(plusDays(e.date, e.days || 1))}`,
       `SUMMARY:${escTxt(e.title)}`,
       e.notes ? `DESCRIPTION:${escTxt(e.notes)}` : "",
       "END:VEVENT");
@@ -1709,6 +1717,7 @@ function renderPublicItinerary() {
           <div style="font-weight:700">${cat.emoji} ${esc(s.name)}${s.cost != null ? ` <span style="font-weight:400;color:var(--ink-soft)">${money(Number(s.cost))}</span>` : ""}</div>
           ${s.address ? `<div style="font-size:12px;color:var(--ink-soft)">${esc(s.address)}</div>` : ""}
           ${s.notes ? `<div style="font-size:12.5px;font-style:italic;color:var(--ink-soft);margin-top:2px">${esc(s.notes)}</div>` : ""}
+          ${s.start_time || s.end_time ? `<div style="font-size:11.5px;color:var(--teal);margin-top:2px">🕐 ${s.category === "transit" ? `${s.start_time ? "dep " + fmtClock(s.start_time) : ""}${s.start_time && s.end_time ? " → " : ""}${s.end_time ? "arr " + fmtClock(s.end_time) : ""}` : `${fmtClock(s.start_time) || ""}${s.end_time ? "–" + fmtClock(s.end_time) : ""}`}</div>` : ""}
           ${s.slot && SLOT_META[s.slot] ? `<div style="font-size:11.5px;color:var(--ink-soft);margin-top:2px">${SLOT_META[s.slot].emoji} ${SLOT_META[s.slot].label}</div>` : ""}
         </div>`;
       card.onclick = () => { if (s.lat != null && state.map) state.map.setView([s.lat, s.lng], Math.max(state.map.getZoom(), 14)); };
@@ -2516,6 +2525,10 @@ function openStopForm(pre, existing = null) {
       <div class="field" style="flex:1.4;display:flex;align-items:flex-end;padding-bottom:9px"><span id="m-nights" style="font-size:12px;color:var(--ink-soft)"></span></div>
     </div>
     <div class="field-row">
+      <div class="field"><label id="m-stime1-label">Time (optional)</label><input id="m-stime1" type="time" value="${existing && existing.start_time ? existing.start_time.slice(0, 5) : ""}"></div>
+      <div class="field"><label id="m-stime2-label">Until</label><input id="m-stime2" type="time" value="${existing && existing.end_time ? existing.end_time.slice(0, 5) : ""}"></div>
+    </div>
+    <div class="field-row">
       <div class="field"><label>Cost (${esc((state.trip && state.trip.currency) || "USD")}, optional)</label><input id="m-scost" type="number" min="0" step="any" value="${existing && existing.cost != null ? existing.cost : (pre && pre.cost != null ? pre.cost : "")}" placeholder="0"></div>
       <div class="field" style="flex:2"><label>Notes</label><textarea id="m-snotes" rows="2" placeholder="Reservations, tips, links…">${esc(existing ? (existing.notes || "") : (pre.notes || ""))}</textarea></div>
     </div>
@@ -2525,6 +2538,15 @@ function openStopForm(pre, existing = null) {
       <button class="btn primary" id="m-ssave">${existing ? "Save" : "Add stop"}</button>
     </div>`);
   if (window.innerWidth > 820) $("m-sname").focus();
+
+  // transit gets depart/arrive labels; everything else a generic time range
+  const syncTimeLabels = () => {
+    const isTransit = $("m-scat").value === "transit";
+    $("m-stime1-label").textContent = isTransit ? "Departs (optional)" : "Time (optional)";
+    $("m-stime2-label").textContent = isTransit ? "Arrives" : "Until";
+  };
+  $("m-scat").addEventListener("change", syncTimeLabels);
+  syncTimeLabels();
 
   // lodging = a stay: pick the check-out day; cost is per night
   const syncLodging = () => {
@@ -2568,6 +2590,8 @@ function openStopForm(pre, existing = null) {
       end_day: endDay,
       notes: $("m-snotes").value.trim() || null,
       cost: costRaw === "" ? null : Math.max(0, parseFloat(costRaw) || 0),
+      start_time: $("m-stime1").value || null,
+      end_time: $("m-stime2").value || null,
     };
     if (existing) {
       if (dayIndex !== existing.day_index) {
@@ -2773,7 +2797,7 @@ function renderItinerary() {
     bar.innerHTML = `
       <div class="today-line">Day ${todayIdx} of ${dayCount} — today${wx ? ` · ${wx.emoji} ${wx.max}°` : ""}</div>
       ${next
-        ? `<div class="today-next">Up next: ${esc(next.name)}</div>
+        ? `<div class="today-next">Up next: ${esc(next.name)}${next.start_time ? ` · ${next.category === "transit" ? "departs " : ""}${fmtClock(next.start_time)}` : next.end_time && next.category === "transit" ? ` · arrives ${fmtClock(next.end_time)}` : ""}</div>
            ${next.lat != null ? `<button class="btn nav-next">🧭 Directions</button>` : ""}
            <button class="btn done-next">✓ Done, what's next?</button>`
         : todays.length
@@ -2822,8 +2846,9 @@ function renderItinerary() {
     const routable = d > 0 ? routableStops(d) : [];
     const dwellMin = d > 0 ? stops.reduce((a, s2) => a + (DWELL_MIN[s2.category] != null ? DWELL_MIN[s2.category] : 60), 0) : 0;
     const loadMin = dwellMin + (travel ? travel.totalMin : 0);
+    const winMin = d > 0 ? dayWindowMin(d) : 600;
     const loadStr = d > 0 && travel && loadMin >= 120
-      ? `<span class="day-load ${loadMin > 600 ? "tight" : ""}" title="Estimated time at stops plus travel">≈ ${fmtMin(loadMin)}</span>` : "";
+      ? `<span class="day-load ${loadMin > winMin ? "tight" : ""}" title="Estimated time at stops plus travel${winMin < 600 ? ` — travel times leave ~${fmtMin(winMin)} of usable day` : ""}">≈ ${fmtMin(loadMin)}${winMin < 600 ? ` / ${fmtMin(winMin)}` : ""}</span>` : "";
     section.innerHTML = `
       <div class="day-header">
         <span class="day-title">${title}</span>${d === todayIdx ? '<span class="today-chip">TODAY</span>' : ""}
@@ -2833,8 +2858,8 @@ function renderItinerary() {
     if (!stops.length) {
       section.innerHTML += `<div class="empty-day">Nothing planned — search a place, click the map, or drag a stop here.</div>`;
     }
-    if (travel && loadMin > 600) {
-      section.innerHTML += `<div class="day-warn">⚠️ Roughly ${fmtMin(loadMin)} of stops and travel — more than fits a comfortable day. Maybe move something to another day?</div>`;
+    if (travel && loadMin > winMin) {
+      section.innerHTML += `<div class="day-warn">⚠️ Roughly ${fmtMin(loadMin)} of stops and travel${winMin < 600 ? ` but your travel times leave only ~${fmtMin(winMin)} of usable day` : " — more than fits a comfortable day"}. Maybe move something to another day?</div>`;
     }
     section.addEventListener("dragover", (e) => sectionDragOver(e, section));
     section.addEventListener("drop", (e) => sectionDrop(e, d));
@@ -2859,10 +2884,14 @@ function renderItinerary() {
       const closedChip = d > 0 && s.hours && closedOnDay(s.hours, state.trip, d)
         ? `<span class="cost-chip closed-chip" title="${esc(s.hours)}">⚠️ may be closed ${wdNames[stopWeekday(state.trip, d)]}</span>`
         : s.hours ? `<span class="cost-chip" style="background:#eef4f4;cursor:help" title="${esc(s.hours)}">🕐</span>` : "";
+      const timeChip = s.start_time || s.end_time
+        ? `<span class="cost-chip time-chip">${s.category === "transit"
+            ? `${s.start_time ? "dep " + fmtClock(s.start_time) : ""}${s.start_time && s.end_time ? " → " : ""}${s.end_time ? "arr " + fmtClock(s.end_time) : ""}`
+            : `${fmtClock(s.start_time) || "…"}${s.end_time ? "–" + fmtClock(s.end_time) : ""}`}</span>` : "";
       card.innerHTML = `
         <div class="stop-num ${d > 0 ? "checkable" : ""} ${s.visited_at ? "checked" : ""}" title="${d > 0 ? (s.visited_at ? "Visited — tap to undo" : "Tap to mark visited") : ""}" style="background:${cat.color}">${s.visited_at ? "✓" : d === 0 ? "★" : num}</div>
         <div class="stop-body">
-          <div class="stop-name">${cat.emoji} ${esc(s.name)}${newChip}${costChip}${stayChip}${closedChip}</div>
+          <div class="stop-name">${cat.emoji} ${esc(s.name)}${newChip}${timeChip}${costChip}${stayChip}${closedChip}</div>
           ${s.address ? `<div class="stop-addr">${esc(s.address)}</div>` : ""}
           ${s.notes ? `<div class="stop-notes">${linkify(esc(s.notes))}</div>` : ""}
           ${stopPhotos(s.id).length ? `<div class="stop-photos">${stopPhotos(s.id).map(p => `<img data-ph="${esc(p.id)}" src="${photoUrlCache[p.path] || ""}" alt="photo" loading="lazy">`).join("")}</div>` : ""}
@@ -3250,6 +3279,22 @@ function renderCommentList() {
     box.appendChild(row);
   }
   box.scrollTop = box.scrollHeight;
+}
+
+/* ---------- clock times on stops (flights, trains, reservations) ---------- */
+function toMinT(t) { return t ? parseInt(t.slice(0, 2), 10) * 60 + parseInt(t.slice(3, 5), 10) : null; }
+function fmtClock(t) { return t ? t.slice(0, 5) : ""; }
+/* how much day is actually usable, given timed transit: an arrival eats the
+   morning, a departure eats the afternoon. 600min (~10h) = a normal full day. */
+function dayWindowMin(d) {
+  let win = 600;
+  for (const s of state.stops) {
+    if (s.day_index !== d || s.category !== "transit") continue;
+    const arr = toMinT(s.end_time), dep = toMinT(s.start_time);
+    if (arr != null) win = Math.min(win, Math.max(0, (22 * 60 - arr) - 30));      // arrive, settle, then the evening
+    else if (dep != null) win = Math.min(win, Math.max(0, dep - 9 * 60 - 60));    // morning until an hour before departure
+  }
+  return win;
 }
 
 /* ---------- time-of-day slots within a day ---------- */
@@ -3784,10 +3829,13 @@ async function runAutoPlan(live, ideas, dayCount) {
   for (let d = 1; d <= dayCount; d++) load[d] = state.stops.filter(s => s.day_index === d).length;
   const totalAfter = ordered.length + Object.values(load).reduce((a, b) => a + b, 0);
   const cap = Math.max(4, Math.ceil(totalAfter / dayCount));
+  // arrival/departure days hold proportionally less (a 14:30 landing is not a full day)
+  const capFor = {};
+  for (let dd = 1; dd <= dayCount; dd++) capFor[dd] = Math.max(dayWindowMin(dd) > 0 ? 1 : 0, Math.round(cap * dayWindowMin(dd) / 600));
   let d = 1, lastDay = 1;
   const newRows = [], moves = [], suggIds = [];
   for (const it of ordered) {
-    while (d < dayCount && load[d] >= cap) d++;
+    while (d < dayCount && load[d] >= capFor[d]) d++;
     // avoid dropping a stop on a weekday its opening hours say it's closed
     let target = d;
     const hrs = it.sugg ? it.sugg.hours : it.stop ? it.stop.hours : null;
@@ -3890,7 +3938,12 @@ async function syncLiveActivity(todayIdx, dayCount) {
           tripName: state.trip.name || "Trip",
           dayLabel: `Day ${todayIdx} of ${dayCount}`,
           stopName: next.name,
-          detail: [cat.label, slot ? `${slot.emoji} ${slot.label.toLowerCase()}` : null, `day ${todayIdx}/${dayCount}`].filter(Boolean).join(" · "),
+          detail: [
+            next.start_time ? `${next.category === "transit" ? "departs " : ""}${fmtClock(next.start_time)}` : (next.end_time && next.category === "transit" ? `arrives ${fmtClock(next.end_time)}` : null),
+            cat.label,
+            slot && !next.start_time ? `${slot.emoji} ${slot.label.toLowerCase()}` : null,
+            `day ${todayIdx}/${dayCount}`,
+          ].filter(Boolean).join(" · "),
           emoji: cat.emoji,
           stopsDone: todays.filter(s => s.visited_at).length,
           stopsTotal: todays.length,

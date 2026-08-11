@@ -94,6 +94,8 @@ Theme: you always know what the crew did. All web-side — no new iOS build need
 
 4. **Shareable recap page** — ✅ built 10 Aug 2026. The recap modal gains "🌐 Make a web page" (owner-only toggle, separate `recap_slug` token since the page shows photos + spend total): app.jotandtrot.com/recap/TOKEN is a public scrolling page — hero, stat tiles, day-colored route map, day-by-day with ✓s, photo wall, and a "Plan your own trip" CTA. Photos come from the private bucket via the `recap-data` edge function (service role signs 24h URLs; whitelisted fields only; revocation → 404, verified). Share text includes the link when enabled. This is the growth artifact — the thing that gets posted in group chats.
 
+5. **Flights & arrival times** — ✅ built 10 Aug 2026. Any stop can now carry optional clock times (start/end): 🚆 transit stops read "dep 11:10 → arr 14:30", other stops "19:30" or "19:30–21:00" (dinner reservations, timed entries). The schedule is aware of them: arrival/departure days shrink their usable window (14:30 landing → ~7h day), the overpacked warning and day-load chip use it ("≈ 9h / 7h"), and auto-plan assigns proportionally fewer stops to pinched days. Today view + lock-screen Live Activity show "departs 11:10"/"arrives 14:30"; calendar export uses exact times (minute-precise, .ics and EventKit) instead of slot guesses; times show on the public /plan view too. Untimed stops behave exactly as before.
+
 ## Ongoing throughout
 
 - TestFlight builds to the crew at the end of each phase

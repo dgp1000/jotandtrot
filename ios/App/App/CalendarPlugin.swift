@@ -34,8 +34,8 @@ public class CalendarPlugin: CAPPlugin, CAPBridgedPlugin {
                 e.notes = ev["notes"] as? String
                 e.calendar = self.store.defaultCalendarForNewEvents
                 if let sh = ev["startHour"] as? Int, let eh = ev["endHour"] as? Int,
-                   let start = Calendar.current.date(bySettingHour: sh, minute: 0, second: 0, of: day),
-                   let end = Calendar.current.date(bySettingHour: eh, minute: 0, second: 0, of: day) {
+                   let start = Calendar.current.date(bySettingHour: sh, minute: (ev["startMinute"] as? NSNumber)?.intValue ?? 0, second: 0, of: day),
+                   let end = Calendar.current.date(bySettingHour: eh, minute: (ev["endMinute"] as? NSNumber)?.intValue ?? 0, second: 0, of: day) {
                     e.startDate = start
                     e.endDate = end
                 } else {
