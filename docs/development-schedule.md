@@ -44,6 +44,7 @@ Decided not needed for launch. (Correction 10 Aug 2026: the app in fact already 
 - Age rating questionnaire, App Privacy "nutrition label" ✅
 - Review notes with a demo account for Apple's reviewer ✅
 - Submitted to App Review ✅ — first reviews take 1–3 days; a rejection with a specific reason is normal — fix and resubmit.
+- **21 Aug 2026: REJECTED (Guideline 4.0.0 Design)** — expedite (filed 20 Aug) worked; Apple reviewed the stale build 12 (submitted 9 Aug), which predates the Phase F iPad layout (6828dce, 10 Aug: at that commit iPad Air portrait = exactly 820px = phone layout). Their attached screenshot (iPhone 17 Pro Max) flags the "Notifications are off" toast clipped at the bottom edge behind the Map/Plan bar. Fixed 21 Aug: toast now fades in above the bottom nav (safe-area aware, no offscreen slide) — in app.template.html; rebuilt www + iOS public. **To resubmit: archive/upload a new build (project at 16), attach it to version 1.0 in App Store Connect, Resubmit to App Review + reply noting the iPad layout rework and toast fix.**
 
 ## Phase E — Post-launch expansion
 

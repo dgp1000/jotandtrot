@@ -567,21 +567,31 @@ body.dark .day-warn { background: #3a2c18; color: #f0c896; border-color: #6b4e1f
 }
 .pin span { transform: rotate(45deg); color: #fff; font-size: 11px; font-weight: 800; }
 
-/* toast */
+/* toast — fades in above the bottom nav; never slides through the screen edge
+   (App Review flagged the old offscreen slide as clipped UI on tall iPhones) */
 #toast {
   position: fixed;
-  bottom: 24px; left: 50%;
-  transform: translateX(-50%) translateY(80px);
+  bottom: calc(24px + env(safe-area-inset-bottom)); left: 50%;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  transform: translateX(-50%) translateY(10px);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
   background: var(--ink);
   color: #fff;
   padding: 10px 18px;
   border-radius: 12px;
   font-size: 13.5px;
   z-index: 3000;
-  transition: transform .25s;
+  transition: transform .25s, opacity .25s, visibility .25s;
   box-shadow: var(--shadow-lg);
 }
-#toast.show { transform: translateX(-50%) translateY(0); }
+#toast.show { transform: translateX(-50%) translateY(0); opacity: 1; visibility: visible; }
+/* phones in a trip: the Map/Plan bar owns the bottom edge — float the toast above it */
+@media (max-width: 700px) {
+  body.in-trip #toast { bottom: calc(72px + env(safe-area-inset-bottom)); }
+}
 
 .offline-note {
   background: #fdf3e3; border: 1px solid #f0d9ad; color: #7a5312;
