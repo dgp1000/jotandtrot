@@ -669,6 +669,8 @@ body.dark .day-warn { background: #3a2c18; color: #f0c896; border-color: #6b4e1f
       <a id="push-link" href="#" style="display:none">🔔 Turn on notifications</a>
       <span id="push-dot" style="color:var(--line);display:none"> · </span>
       <a id="feedback-link" href="#">💬 Something broken or missing? Tell us</a>
+      <span style="color:var(--line)"> · </span>
+      <a id="delete-account-link" href="#">Delete account</a>
     </div>
   </div>
 </div>
@@ -4337,6 +4339,35 @@ $("feedback-link").onclick = (e) => {
   const plat = (C && C.isNativePlatform && C.isNativePlatform()) ? "iOS app" : "web";
   const body = encodeURIComponent(`\n\n—\nJot & Trot ${plat} · ${navigator.userAgent}`);
   location.href = `mailto:support@jotandtrot.com?subject=${encodeURIComponent("Jot & Trot feedback")}&body=${body}`;
+};
+$("delete-account-link").onclick = (e) => {
+  e.preventDefault();
+  openModal(`
+    <h2>Delete your account?</h2>
+    <p style="font-size:13.5px;color:var(--ink-soft);line-height:1.5;margin-bottom:6px">
+      This permanently deletes your account, <b>every trip you own</b> (including its stops, photos,
+      votes, and comments), and removes your votes, photos, and comments from trips you've joined.
+      There's no undo.
+    </p>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn danger" id="m-confirm-del-acct" style="border-color:#c0392b;color:#c0392b">Delete my account</button>
+    </div>`);
+  $("m-confirm-del-acct").onclick = async () => {
+    const btn = $("m-confirm-del-acct");
+    btn.disabled = true; btn.textContent = "Deleting…";
+    const { error } = await sb.functions.invoke("delete-account", { method: "POST" });
+    if (error) {
+      btn.disabled = false; btn.textContent = "Delete my account";
+      toast("Couldn't delete your account — try again or email support@jotandtrot.com");
+      console.error(error);
+      return;
+    }
+    closeModal();
+    try { await sb.auth.signOut(); } catch (e2) { /* session is already gone server-side */ }
+    showAuth();
+    toast("Your account has been deleted");
+  };
 };
 sb.auth.onAuthStateChange((event, session) => {
   if (event === "SIGNED_OUT") showAuth();
